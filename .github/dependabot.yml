@@ -24,6 +24,22 @@ updates:
     target-branch: main
     labels:
       - "type: dependency upgrade"
+    ignore:
+      # Era-pinned on purpose, never to be bumped. plugin/build.gradle resolves the mock Grails
+      # installations under plugin/testdata/ from Maven at test time; those coordinates are test
+      # fixtures for the Grails 1.1 and 1.4 layouts the tests exercise, not dependencies of the
+      # plugin, and bumping one silently turns a Grails 1.x fixture into a Grails 6 one. Likewise
+      # libs/grails-rt and compilers/grails-compiler-patch compile against the Grails/Groovy of
+      # the builds they run inside (Grails 1.x/2.x), so a newer release would be the wrong API.
+      - dependency-name: "org.grails:*"
+      - dependency-name: "org.codehaus.groovy:*"
+      - dependency-name: "org.springframework:*"
+      - dependency-name: "org.hibernate:*"
+      - dependency-name: "org.mortbay.jetty:*"
+      - dependency-name: "org.spockframework:*"
+      # junit:junit appears twice in plugin/build.gradle: the mockGrails11 fixture pins 4.8.1 and
+      # the test suite is on 4.13.2, the final JUnit 4 release. Ignored so the fixture stays put.
+      - dependency-name: "junit:junit"
   # build-logic included build (convention plugins + their tool dependencies)
   - package-ecosystem: gradle
     directory: "/build-logic"

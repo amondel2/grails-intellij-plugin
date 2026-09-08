@@ -112,8 +112,8 @@ public final class GrailsExecutionUtils {
     if (file.isDirectory()) { // Development mode
       try {
         File tempFile = FileUtil.createTempFile("idea", AGENT_JAR_SUFFIX, true);
-        try (Compressor zip = new Compressor.Zip(tempFile)) {
-          zip.addDirectory(file);
+        try (Compressor zip = new Compressor.Zip(tempFile.toPath())) {
+          zip.addDirectory(file.toPath());
         }
         return tempFile.getAbsolutePath();
       }

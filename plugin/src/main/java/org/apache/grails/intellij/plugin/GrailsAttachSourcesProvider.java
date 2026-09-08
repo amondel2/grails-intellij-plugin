@@ -29,14 +29,17 @@ import com.intellij.openapi.roots.libraries.Library;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.JarFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.platform.backend.workspace.WorkspaceModel;
+import com.intellij.platform.workspace.jps.entities.LibraryEntity;
 import com.intellij.psi.PsiFile;
 import com.intellij.util.ArrayUtil;
-import com.intellij.util.concurrency.ThreadingAssertions;
+import com.intellij.workspaceModel.ide.legacyBridge.LibraryBridgesKt;
 import org.jetbrains.annotations.NotNull;
 import org.apache.grails.intellij.plugin.config.GrailsConfigUtils;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 
 final class GrailsAttachSourcesProvider extends AbstractAttachSourceProvider {
@@ -44,12 +47,24 @@ final class GrailsAttachSourcesProvider extends AbstractAttachSourceProvider {
   private static final Logger LOG = Logger.getInstance(GrailsAttachSourcesProvider.class);
 
   @Override
+  @Deprecated
   public @NotNull Collection<? extends AttachSourcesAction> getActions(@NotNull List<? extends LibraryOrderEntry> orderEntries,
                                                                        @NotNull PsiFile psiFile) {
+    // Still abstract in the platform API; notifications use getLibrariesActions instead.
+    return List.of();
+  }
+
+  @Override
+  public @NotNull Collection<? extends AttachSourcesAction> getLibrariesActions(@NotNull Collection<LibraryEntity> libraryEntities,
+                                                                               @NotNull PsiFile psiFile) {
     VirtualFile jar = getJarByPsiFile(psiFile);
     if (jar == null) return List.of();
 
-    final Library library = getLibraryFromOrderEntriesList(orderEntries);
+    var libraries = new HashSet<>(libraryEntities);
+    if (libraries.size() != 1) return List.of();
+
+    final Library library = LibraryBridgesKt.findLibraryBridge(libraries.iterator().next(),
+      WorkspaceModel.getInstance(psiFile.getProject()).getCurrentSnapshot());
     if (library == null) return List.of();
 
     VirtualFile[] files = library.getFiles(OrderRootType.CLASSES);
@@ -77,17 +92,12 @@ final class GrailsAttachSourcesProvider extends AbstractAttachSourceProvider {
 
     final String sourceFileName = jarNameWithoutExt + "-sources.jar";
 
-    ThreadingAssertions.assertEventDispatchThread();
-
-    grailsHome.refresh(false, false);
-
+    // Discovery runs in a background read action; use the VFS without synchronous refresh.
     final VirtualFile grailsHomeSrc = grailsHome.findChild("src");
     if (grailsHomeSrc == null) {
       LOG.warn("Grails home don't contains 'scr' folder");
       return List.of();
     }
-
-    grailsHomeSrc.refresh(false, false);
 
     VirtualFile srcFile = grailsHomeSrc.findChild(sourceFileName);
     if (srcFile != null) {

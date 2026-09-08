@@ -56,6 +56,17 @@ tasks.named('rat') { task ->
             '.idea/**',
             '**/*.iml',
             'out/**',
+            // Eclipse/JDT metadata is generated locally, not source code
+            '**/.classpath',
+            '**/.project',
+            '**/.settings/**',
+            // Eclipse/JDT compiled classes and copied resources; explicit project paths keep
+            // the source scripts under etc/bin audited
+            'build-logic/bin/**',
+            'plugin/bin/**',
+            'libs/*/bin/**',
+            'compilers/*/bin/**',
+            'pluginModules/*/bin/**',
             // IntelliJ Platform Gradle Plugin local cache (generated Ivy descriptors, git-ignored)
             '.intellijPlatform/**',
             // build-logic included build: generated output and local caches (sources are headered)

@@ -31,7 +31,7 @@ dependencies {
         bundledPlugin 'com.intellij.javaee.el' // no longer transitive in 2026.2
         bundledPlugin 'com.intellij.persistence'
         bundledPlugin 'com.intellij.javaee.jpa'
-        bundledPlugin 'com.intellij.jsp'
+        plugin 'com.intellij.jsp:262.10315.69' // JSP implementation is no longer bundled in 2026.2.2
         bundledPlugin 'com.intellij.javaee.web'
         bundledPlugin 'org.intellij.groovy'
         bundledPlugin 'com.intellij.database'
@@ -70,6 +70,7 @@ dependencies {
     testImplementation project(':libs-testFramework')
     testCompileOnly project(':pluginModules-i18n')
     testCompileOnly project(':pluginModules-copyright')
+    testCompileOnly project(':pluginModules-maven')
 
     implementation project(':libs-gradle-tooling')
     implementation project(':libs-grails-rt')

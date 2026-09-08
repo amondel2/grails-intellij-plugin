@@ -26,6 +26,7 @@ import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.util.PathUtil;
+import com.intellij.util.containers.ContainerUtil;
 import org.jetbrains.annotations.NotNull;
 import org.apache.grails.intellij.lib.grails.rt.GrailsRtMarker;
 import org.apache.grails.intellij.plugin.GrailsBundle;
@@ -81,7 +82,7 @@ public final class Grails3InstallationCommandExecutor extends GrailsCommandLineE
     params.getVMParametersList().addAll("-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1", "-XX:CICompilerCount=3");
     params.getVMParametersList().addParametersString(command.getVmOptions());
     addCommonJvmOptions(params);
-    params.getClassPath().addAllFiles(runClassPath(new File(grailsSdk.getPath())));
+    params.getClassPath().addAllPaths(ContainerUtil.map(runClassPath(new File(grailsSdk.getPath())), File::toPath));
     params.getClassPath().add(PathUtil.getJarPathForClass(GrailsRtMarker.class)); // we add rt.jar to enable execution of idea scripts
     params.setMainClass("org.grails.cli.GrailsCli");
     command.addToParametersList(params.getProgramParametersList());

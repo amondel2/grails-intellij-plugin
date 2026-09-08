@@ -210,17 +210,15 @@ Dropped as no longer applicable:
 Unblocked by the JetBrains software grant being filed, and carried out under #23.
 
 - [x] Wholesale replacement of the JetBrains-attributed Apache 2.0 headers with the
-      canonical ASF header from `HEADER` — 948 files, one mechanical commit, by
-      `etc/bin/apply-asf-headers.py` (which replaced the pre-grant
-      `expand-jetbrains-headers.py`). Run in the legacy repo too if the fork has happened.
+      canonical ASF header from `HEADER` — 948 files, one mechanical commit. The one-time
+      migration script has since been retired. Run in the legacy repo too if the fork has happened.
 - [x] Move the JetBrains copyright into `NOTICE` and add the "donated to the ASF" wording.
       **Still to confirm against the executed grant text** — the wording used is
       "donated to the Apache Software Foundation under a software grant", and the
       redundant `Licensed under the Apache License, Version 2.0.` line is gone.
-- [x] The header guard: `apply-asf-headers.py --check`, in the RAT workflow. It enforces the
-      one thing RAT cannot see — *which* ALv2 header a file carries — so it needs no copy of
-      RAT's exclusion list, and it fails on either a JetBrains-attributed header or any other
-      divergence from `HEADER`.
+- [x] The migration-time exact-header guard has been retired now that the conversion is
+      complete. RAT remains the ongoing Apache 2.0 license check; `HEADER` remains the
+      template for new files.
 - [x] Revisit RAT config: no changes needed, as expected (both header forms are Apache-2.0 to
       RAT). Audit re-run after the replacement: 996 standards, all Apache licensed, 0 unknown.
 

@@ -17,28 +17,22 @@
  * under the License.
  */
 
-// Per-project JaCoCo conventions. The cross-project aggregate is produced by the root build
-// via org.apache.grails.intellij.build.coverage-aggregation, which wraps Gradle's built-in
-// jacoco-report-aggregation plugin (configuration-cache safe, unlike a hand-rolled aggregate).
+package org.apache.grails.intellij.plugin.lang.gsp.debug;
 
-plugins {
-    id 'jacoco'
-}
+import com.intellij.debugger.engine.JavaDebugAware;
+import com.intellij.psi.PsiFile;
+import org.jetbrains.annotations.NotNull;
+import org.apache.grails.intellij.plugin.fileType.GspFileType;
 
-jacoco {
-    // keep in sync with `jacocoVersion` in gradle.properties
-    toolVersion = providers.gradleProperty('jacocoVersion').getOrElse('0.8.15')
-}
-
-tasks.withType(Test).configureEach {
-    finalizedBy tasks.withType(JacocoReport)
-}
-
-tasks.withType(JacocoReport).configureEach {
-    dependsOn tasks.withType(Test)
-    reports {
-        xml.required = true
-        html.required = true
-        csv.required = false
-    }
+/**
+ * Lets the Java debugger put line breakpoints in GSP files. Replaces the deprecated
+ * {@code LanguageFileType.isJVMDebuggingSupported} override on {@link GspFileType}; the positions
+ * themselves are mapped by {@link GspPositionManager}.
+ */
+public final class GspJavaDebugAware extends JavaDebugAware {
+  @Override
+  public boolean isBreakpointAware(@NotNull PsiFile psiFile) {
+    // The view provider's type covers every root of a GSP file, not just the GSP one.
+    return psiFile.getViewProvider().getFileType() == GspFileType.GSP_FILE_TYPE;
+  }
 }

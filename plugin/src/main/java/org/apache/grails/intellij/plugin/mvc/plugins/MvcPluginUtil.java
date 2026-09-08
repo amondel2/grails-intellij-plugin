@@ -31,6 +31,7 @@ import com.intellij.notification.NotificationType;
 import com.intellij.notification.Notifications;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
+import com.intellij.openapi.util.JDOMUtil;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.text.StringUtil;
@@ -38,10 +39,8 @@ import com.intellij.openapi.vcs.FileStatus;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.net.ProxyConfiguration;
-import org.jdom.Document;
 import org.jdom.Element;
 import org.jdom.JDOMException;
-import org.jdom.input.SAXBuilder;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -278,9 +277,7 @@ public final class MvcPluginUtil {
     try {
       in = file.getInputStream();
 
-      Document document = new SAXBuilder().build(in);
-
-      Element root = document.getRootElement();
+      Element root = JDOMUtil.load(in);
 
       for (Element pluginElement : root.getChildren("plugin")) {
         String name = pluginElement.getAttributeValue("name");
@@ -381,8 +378,7 @@ public final class MvcPluginUtil {
     Element root;
 
     try {
-      Document document = new SAXBuilder().build(inputStream);
-      root = document.getRootElement();
+      root = JDOMUtil.load(inputStream);
     }
     catch (JDOMException e) {
       return null;

@@ -36,13 +36,13 @@ import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.plugins.gradle.service.project.wizard.AbstractGradleModuleBuilder;
 import org.jetbrains.plugins.gradle.settings.DistributionType;
 import org.jetbrains.plugins.gradle.settings.GradleProjectSettings;
 import org.jetbrains.plugins.gradle.util.GradleConstants;
 import org.apache.grails.intellij.plugin.GrailsBundle;
 import org.apache.grails.intellij.plugin.runner.GrailsConsole;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -105,10 +105,10 @@ public abstract class GrailsGradleAwareModuleBuilder extends ModuleBuilder {
     boolean fresh = myIsCreatingNewProject || myParentProject == null;
     ApplicationManager.getApplication().runWriteAction(() -> {
       try {
-        AbstractGradleModuleBuilder.setupGradleSettingsFile(rootProjectPath, root, project.getName(), module.getName(), fresh, false);
+        GradleSettingsFile.setUp(rootProjectPath, root.toNioPath(), project.getName(), module.getName());
         LOG.debug("'settings.gradle' file set up for module: " + module);
       }
-      catch (ConfigurationException e) {
+      catch (IOException e) {
         LOG.debug(e);
         GrailsConsole.NOTIFICATION_GROUP
           .createNotification(GrailsBundle.message("failed.to.create.settings.gradle.notification.title"),

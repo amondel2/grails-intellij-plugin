@@ -39,6 +39,7 @@ import com.intellij.psi.xml.XmlChildRole;
 import com.intellij.psi.xml.XmlTokenType;
 import com.intellij.util.IncorrectOperationException;
 import com.intellij.xml.XmlExtension;
+import org.apache.grails.intellij.plugin.fileType.GspFileType;
 import org.jetbrains.annotations.NotNull;
 import org.apache.grails.intellij.plugin.lang.gsp.GspFileViewProvider;
 import org.apache.grails.intellij.plugin.lang.gsp.parsing.GspElementTypes;
@@ -104,7 +105,7 @@ public class GspGrailsTagImpl extends XmlTagImpl implements GspGrailsTag {
       protected PsiElement doSetTextToElement(String text) {
         if (!text.matches("[\\w\\-/]+")) return getElement();
 
-        PsiFile gspFile = PsiFileFactory.getInstance(getProject()).createFileFromText("a.gsp", "<tmpl:" + text + "></tmpl:" + text + '>');
+        PsiFile gspFile = PsiFileFactory.getInstance(getProject()).createFileFromText("a.gsp", GspFileType.GSP_FILE_TYPE, "<tmpl:" + text + "></tmpl:" + text + '>');
 
         boolean isStartName = true;
         for (PsiElement e = GspGrailsTagImpl.this.getFirstChild(); e != null; e = e.getNextSibling()) {

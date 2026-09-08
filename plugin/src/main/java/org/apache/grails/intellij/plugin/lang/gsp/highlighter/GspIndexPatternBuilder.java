@@ -20,12 +20,9 @@
 package org.apache.grails.intellij.plugin.lang.gsp.highlighter;
 
 import com.intellij.lexer.Lexer;
-import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.highlighter.EditorHighlighter;
 import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory;
-import com.intellij.openapi.editor.impl.EditorHighlighterCache;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.impl.search.IndexPatternBuilder;
 import com.intellij.psi.impl.search.LexerEditorHighlighterLexer;
@@ -42,24 +39,13 @@ public final class GspIndexPatternBuilder implements IndexPatternBuilder {
   @Override
   public Lexer getIndexingLexer(@NotNull PsiFile file) {
     if (file instanceof GspFile) {
-      EditorHighlighter highlighter;
+      VirtualFile virtualFile = file.getVirtualFile();
+      if (virtualFile == null) return null;
 
-      final Document document = PsiDocumentManager.getInstance(file.getProject()).getDocument(file);
-      EditorHighlighter cachedEditorHighlighter;
-      boolean alreadyInitializedHighlighter = false;
-
-      if ((cachedEditorHighlighter = EditorHighlighterCache.getEditorHighlighterForCachesBuilding(document)) != null &&
-          EditorHighlighterCache.checkCanUseCachedEditorHighlighter(file.getText(), cachedEditorHighlighter)) {
-        highlighter = cachedEditorHighlighter;
-        alreadyInitializedHighlighter = true;
-      } else {
-        VirtualFile virtualFile = file.getVirtualFile();
-        if (virtualFile == null) return null;
-
-        highlighter = EditorHighlighterFactory.getInstance().createEditorHighlighter(file.getProject(), virtualFile);
-      }
-
-      return new LexerEditorHighlighterLexer(highlighter, alreadyInitializedHighlighter);
+      // The layered GSP highlighter, not the bare GSP lexer: a TODO inside an embedded Groovy or
+      // JavaScript comment is only a comment token once the layers have run.
+      EditorHighlighter highlighter = EditorHighlighterFactory.getInstance().createEditorHighlighter(file.getProject(), virtualFile);
+      return new LexerEditorHighlighterLexer(highlighter, false);
     }
     return null;
   }

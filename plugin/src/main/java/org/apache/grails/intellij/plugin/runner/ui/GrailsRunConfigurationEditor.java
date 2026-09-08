@@ -62,7 +62,8 @@ public class GrailsRunConfigurationEditor extends GrailsRunConfigurationEditorWi
   private JBLabel myVMParametersLabel;
   private RawCommandLineEditor myVMParameters;
 
-  private EnvironmentVariablesComponent myEnvVariablesComponent;
+  private JPanel myEnvVariablesPanel;
+  private final EnvironmentVariablesComponent myEnvVariablesComponent;
 
   private JBCheckBox myLaunchBrowser;
   private JBTextField myLaunchBrowserUrl;
@@ -72,6 +73,11 @@ public class GrailsRunConfigurationEditor extends GrailsRunConfigurationEditorWi
   private final Collection<SettingsEditor<GrailsRunConfiguration>> myExtensionEditors = new ArrayList<>();
 
   public GrailsRunConfigurationEditor(Project project) {
+    // Built here rather than by the form: the component takes the project, and the form's
+    // generated code can only use the no-argument constructor.
+    myEnvVariablesComponent = new EnvironmentVariablesComponent(project);
+    myEnvVariablesComponent.setLabelLocation(BorderLayout.WEST);
+    myEnvVariablesPanel.add(myEnvVariablesComponent, BorderLayout.CENTER);
     myApplicationsCombo.setApplications(GrailsApplicationManager.getInstance(project).getApplications());
     myApplicationsCombo.addItemListener(e -> applicationChanged(getApplication()));
     myCommandLine.getDocument().addDocumentListener(new DocumentAdapter() {
@@ -80,7 +86,6 @@ public class GrailsRunConfigurationEditor extends GrailsRunConfigurationEditorWi
         commandLineChanged(getCommandLine());
       }
     });
-    myVMParameters.setDialogCaption("VM Options");
     myLaunchBrowser.addChangeListener(e -> myLaunchBrowserUrl.setEnabled(myLaunchBrowser.isEnabled() && myLaunchBrowser.isSelected()));
     setAnchor();
   }

@@ -19,6 +19,7 @@
 
 package org.apache.grails.intellij.plugin.projectView.nodes;
 
+import com.intellij.icons.AllIcons;
 import com.intellij.ide.projectView.PresentationData;
 import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
@@ -26,8 +27,6 @@ import com.intellij.ide.util.treeView.ValidateableNode;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.ui.IconManager;
-import com.intellij.ui.PlatformIcons;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Collection;
@@ -78,7 +77,7 @@ public class GrailsRegularPackageNode extends GrailsArtefactPackageNode<Compacte
 
   @Override
   protected void update(@NotNull PresentationData presentation) {
-    presentation.setIcon(IconManager.getInstance().getPlatformIcon(PlatformIcons.Package));
+    presentation.setIcon(AllIcons.Nodes.Package);
     presentation.setPresentableText(GrailsNodes.fqnString(getValue().getRelativeParts()));
   }
 

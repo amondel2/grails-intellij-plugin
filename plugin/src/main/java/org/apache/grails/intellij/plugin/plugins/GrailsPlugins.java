@@ -50,7 +50,7 @@ public final class GrailsPlugins {
   static final String PLUGIN_CLASS_SUFFIX = "GrailsPlugin";
 
   public static @NotNull Collection<GrailsPluginDescriptor> computePlugins(@NotNull GrailsApplication application) {
-    return ReadAction.compute(() -> CachedValuesManager.getManager(application.getProject()).getCachedValue(
+    return ReadAction.computeBlocking(() -> CachedValuesManager.getManager(application.getProject()).getCachedValue(
       application,
       () -> {
         List<GrailsPluginDescriptor> all = new ArrayList<>(getSourcePlugins(application));
@@ -60,7 +60,7 @@ public final class GrailsPlugins {
   }
 
   public static @NotNull Collection<Grails3SourcePluginDescriptor> getSourcePlugins(@NotNull GrailsApplication application) {
-    return ReadAction.compute(() -> CachedValuesManager.getManager(application.getProject()).getCachedValue(
+    return ReadAction.computeBlocking(() -> CachedValuesManager.getManager(application.getProject()).getCachedValue(
       application,
       () -> Result.create(doComputeSourcePlugins(application),
                           ProjectRootManager.getInstance(application.getProject()))));

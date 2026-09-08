@@ -37,7 +37,6 @@ import com.intellij.util.xmlb.XmlSerializer;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.idea.maven.execution.MavenExternalParameters;
 import org.jetbrains.idea.maven.execution.MavenRunConfiguration;
 import org.jetbrains.idea.maven.execution.MavenRunConfigurationType;
 import org.jetbrains.idea.maven.execution.MavenRunner;
@@ -158,9 +157,13 @@ final class MavenCommandExecutor extends GrailsCommandLineExecutor implements Gr
       explicitProfiles.getDisabledProfiles()
     );
 
-    final JavaParameters res = MavenExternalParameters.createJavaParameters(
-      project, runnerParameters, generalSettings, runnerSettings, null
-    );
+    ConfigurationFactory factory = MavenRunConfigurationType.getInstance().getConfigurationFactories()[0];
+    MavenRunConfiguration configuration = (MavenRunConfiguration)factory.createTemplateConfiguration(project);
+    configuration.setRunnerParameters(runnerParameters);
+    configuration.setGeneralSettings(generalSettings);
+    configuration.setRunnerSettings(runnerSettings);
+    // Grails listeners and debugger runners still require a Java launch, not a Maven script run state.
+    final JavaParameters res = configuration.createJavaParameters(project);
     addCommonJvmOptions(res);
     return res;
   }

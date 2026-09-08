@@ -18,10 +18,11 @@
  */
 package org.apache.grails.intellij.plugin.editor;
 
-import com.intellij.diagnostic.LoadingState;
 import com.intellij.ide.actions.DistractionFreeModeController;
 import com.intellij.ide.ui.UISettings;
 import com.intellij.ide.util.PropertiesComponent;
+import com.intellij.openapi.application.Application;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileEditor.FileEditor;
 import com.intellij.openapi.fileEditor.TextEditor;
 import com.intellij.openapi.project.Project;
@@ -61,12 +62,16 @@ public final class GrailsEditorToolbar {
 
   /**
    * Mirrors what {@code propComponentProperty} did for the Kotlin {@code var} this replaces: read
-   * from the application-level {@link PropertiesComponent}, fall back to the default before
-   * components are loaded, and store nothing when the value equals the default.
+   * from the application-level {@link PropertiesComponent}, fall back to the default while the
+   * application or its services are not available yet, and store nothing when the value equals
+   * the default.
    */
   public static boolean isShowEditorToolbar() {
-    if (!LoadingState.COMPONENTS_LOADED.isOccurred()) return SHOW_TOOLBAR_DEFAULT;
-    return PropertiesComponent.getInstance().getBoolean(SHOW_TOOLBAR_PROPERTY, SHOW_TOOLBAR_DEFAULT);
+    Application application = ApplicationManager.getApplication();
+    if (application == null || application.isDisposed()) return SHOW_TOOLBAR_DEFAULT;
+    PropertiesComponent properties = application.getService(PropertiesComponent.class);
+    if (properties == null) return SHOW_TOOLBAR_DEFAULT;
+    return properties.getBoolean(SHOW_TOOLBAR_PROPERTY, SHOW_TOOLBAR_DEFAULT);
   }
 
   public static void setShowEditorToolbar(boolean value) {

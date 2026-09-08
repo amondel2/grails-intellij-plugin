@@ -21,7 +21,6 @@ package org.apache.grails.intellij.plugin.references.common;
 
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupElementBuilder;
-import com.intellij.openapi.vfs.CharsetToolkit;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiReference;
 import com.intellij.psi.PsiReferenceBase;
@@ -30,6 +29,7 @@ import com.intellij.util.ProcessingContext;
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.charset.Charset;
+import java.util.Collection;
 
 public class GrailsEncodingReferenceProvider extends PsiReferenceProvider {
   @Override
@@ -42,11 +42,12 @@ public class GrailsEncodingReferenceProvider extends PsiReferenceProvider {
 
       @Override
       public Object @NotNull [] getVariants() {
-        Charset[] charsets = CharsetToolkit.getAvailableCharsets();
+        Collection<Charset> charsets = Charset.availableCharsets().values();
 
-        LookupElement[] res = new LookupElement[charsets.length];
-        for (int i = 0; i < charsets.length; i++) {
-          res[i] = LookupElementBuilder.create(charsets[i].name()).withCaseSensitivity(false);
+        LookupElement[] res = new LookupElement[charsets.size()];
+        int i = 0;
+        for (Charset charset : charsets) {
+          res[i++] = LookupElementBuilder.create(charset.name()).withCaseSensitivity(false);
         }
 
         return res;

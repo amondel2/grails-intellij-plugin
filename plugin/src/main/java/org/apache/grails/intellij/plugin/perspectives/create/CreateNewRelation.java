@@ -21,6 +21,8 @@ package org.apache.grails.intellij.plugin.perspectives.create;
 
 import com.intellij.CommonBundle;
 import com.intellij.icons.AllIcons;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.editor.event.DocumentEvent;
 import com.intellij.openapi.editor.event.DocumentListener;
 import com.intellij.openapi.project.Project;
@@ -101,7 +103,9 @@ public class CreateNewRelation extends DialogWrapper {
     myContentPane.registerKeyboardAction(new ActionListener() {
       @Override
       public void actionPerformed(ActionEvent e) {
-        IdeFocusManager.getGlobalInstance().doWhenFocusSettlesDown(() -> IdeFocusManager.getGlobalInstance().requestFocus(myNameComboBox, true));
+        ApplicationManager.getApplication().invokeLater(
+          () -> IdeFocusManager.getGlobalInstance().requestFocus(myNameComboBox, true),
+          ModalityState.stateForComponent(myNameComboBox));
       }
     }, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
 

@@ -49,6 +49,7 @@ import org.apache.grails.intellij.plugin.mvc.MvcCommand;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
 import java.awt.Font;
@@ -188,17 +189,24 @@ public class InstallUninstallPluginsDialog extends DialogWrapper {
 
     comboBox.setSelectedItem(mvcPlugin.getLastRelease());
 
-    comboBox.setRenderer(SimpleListCellRenderer.create((label, value, index) -> {
-      if ("zip".equals(value.getType())) {
-        label.setText(GrailsBundle.message("install.uninstall.plugins.dialog.zip.release.version", value.getVersion()));
+    comboBox.setRenderer(new SimpleListCellRenderer<>() {
+      @Override
+      public void customize(@NotNull JList<? extends MvcPluginDescriptor.Release> list,
+                            MvcPluginDescriptor.Release value,
+                            int index,
+                            boolean selected,
+                            boolean hasFocus) {
+        if ("zip".equals(value.getType())) {
+          setText(GrailsBundle.message("install.uninstall.plugins.dialog.zip.release.version", value.getVersion()));
+        }
+        else if (value == value.getPlugin().getLastRelease()) {
+          setText(GrailsBundle.message("install.uninstall.plugins.dialog.latest.version", value.getVersion()));
+        }
+        else {
+          setText(value.getVersion());
+        }
       }
-      else if (value == value.getPlugin().getLastRelease()) {
-        label.setText(GrailsBundle.message("install.uninstall.plugins.dialog.latest.version", value.getVersion()));
-      }
-      else {
-        label.setText(value.getVersion());
-      }
-    }));
+    });
 
     return comboBox;
   }

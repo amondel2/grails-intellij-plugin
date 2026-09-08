@@ -1,4 +1,13 @@
 .idea
+# Eclipse/JDT metadata and generated project output; keep the source scripts in etc/bin.
+.classpath
+.project
+.settings/
+/build-logic/bin/
+/plugin/bin/
+/libs/*/bin/
+/compilers/*/bin/
+/pluginModules/*/bin/
 # Gradle build directories, matched by depth rather than **/build: build-logic's convention
 # plugins live in package org.apache.grails.intellij.build, so **/build silently swallowed
 # build-logic/src/main/groovy/org/apache/grails/intellij/build/ and its sources were never

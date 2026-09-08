@@ -36,7 +36,6 @@ import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.WriteExternalException;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.util.JdomKt;
 import com.intellij.util.containers.ContainerUtil;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
@@ -172,7 +171,7 @@ public final class GrailsRunConfiguration
     super.writeExternal(element);
 
     writeSetting(element, ROOT_ELEMENT_NAME, myGrailsApplicationRootPath);
-    JdomKt.addOptionTag(element, LAUNCH_BROWSER, Boolean.toString(myLaunchBrowser), "setting");
+    writeSetting(element, LAUNCH_BROWSER, Boolean.toString(myLaunchBrowser));
     writeSetting(element, LAUNCH_BROWSER_URL, myLaunchBrowserUrl);
 
     final List<GrailsRunConfigurationExtension> configurationExtensions = ContainerUtil.findAll(

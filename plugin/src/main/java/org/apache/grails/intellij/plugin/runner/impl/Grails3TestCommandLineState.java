@@ -20,14 +20,10 @@ package org.apache.grails.intellij.plugin.runner.impl;
 
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.Executor;
-import com.intellij.execution.process.ProcessAdapter;
 import com.intellij.execution.process.ProcessEvent;
+import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.testframework.sm.SMTestRunnerConnectionUtil;
-import com.intellij.execution.testframework.sm.runner.GeneralToSMTRunnerEventsConvertor;
-import com.intellij.execution.testframework.sm.runner.SMTestProxy;
-import com.intellij.execution.testframework.sm.runner.ui.SMTRunnerUIActionsHandler;
-import com.intellij.execution.testframework.sm.runner.ui.SMTestRunnerResultsForm;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.openapi.util.Key;
 import org.jetbrains.annotations.NotNull;
@@ -85,33 +81,16 @@ public class Grails3TestCommandLineState extends GrailsTestAppCommandLineState {
     GradleConsoleProperties consoleProperties =
       new GradleConsoleProperties(getConfiguration(), GrailsRunnerSetup.TEST_FRAMEWORK_NAME, executor);
     GradleTestsExecutionConsole console = new GradleTestsExecutionConsole(consoleProperties, splitterPropertyName);
-    console.setHelpId("reference.runToolWindow.testResultsTab");
-    console.initUI();
-    console.addAttachToProcessListener(handler -> {
-      SMTestRunnerResultsForm resultsViewer = console.getResultsViewer();
-      resultsViewer.addEventsListener(new SMTRunnerUIActionsHandler(consoleProperties));
-
-      SMTestProxy.SMRootTestProxy rootNode = resultsViewer.getTestsRootNode();
-      rootNode.setHandler(handler);
-
-      GeneralToSMTRunnerEventsConvertor eventsProcessor =
-        new GeneralToSMTRunnerEventsConvertor(consoleProperties.getProject(), rootNode, GrailsRunnerSetup.TEST_FRAMEWORK_NAME);
-      eventsProcessor.addEventsListener(resultsViewer);
-      eventsProcessor.onStartTesting();
-
-      handler.addProcessListener(new ProcessAdapter() {
-        @Override
-        public void processTerminated(@NotNull ProcessEvent event) {
-          eventsProcessor.onFinishTesting();
-        }
-
-        @Override
-        @SuppressWarnings("rawtypes") // ProcessListener declares a raw Key
-        public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
-          GradleTestsExecutionConsoleOutputProcessor.onOutput(console, event.getText(), outputType);
-        }
-      });
-    });
+    // Same wiring as the Gradle plugin's own test console manager: initConsoleView installs the
+    // results form, its events processor and the start/finish handling around the attached process.
+    SMTestRunnerConnectionUtil.initConsoleView(console, GrailsRunnerSetup.TEST_FRAMEWORK_NAME);
+    console.addAttachToProcessListener(handler -> handler.addProcessListener(new ProcessListener() {
+      @Override
+      @SuppressWarnings("rawtypes") // ProcessListener declares a raw Key
+      public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
+        GradleTestsExecutionConsoleOutputProcessor.onOutput(console, event.getText(), outputType);
+      }
+    }));
     return console;
   }
 }

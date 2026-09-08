@@ -62,7 +62,7 @@ public class GspPositionManager implements PositionManager {
 
     String path
 
-    = ReadAction.compute(()->{
+    = ReadAction.computeBlocking(()->{
       VirtualFile virtualFile = file.getOriginalFile().getVirtualFile();
       if (virtualFile == null) return null;
       return virtualFile.getPath();
@@ -180,7 +180,7 @@ public class GspPositionManager implements PositionManager {
   }
 
   @Override
-  public @NotNull Set<? extends FileType> getAcceptedFileTypes() {
-    return ourFileTypes;
+  public boolean isAcceptedFileType(@NotNull FileType fileType) {
+    return ourFileTypes.contains(fileType);
   }
  }

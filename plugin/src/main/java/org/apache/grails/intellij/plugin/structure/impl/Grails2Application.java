@@ -64,11 +64,11 @@ public final class Grails2Application extends OldGrailsModuleBasedApplication {
   }
 
   private @Nullable String getApplicationPropertiesValue(@NotNull String key) {
-    return ReadAction.compute(() -> GrailsProperties.getPropertyValue(getApplicationProperties(), key));
+    return ReadAction.computeBlocking(() -> GrailsProperties.getPropertyValue(getApplicationProperties(), key));
   }
 
   private boolean getBooleanSetting(@NotNull String key) {
-    return ReadAction.compute(() -> {
+    return ReadAction.computeBlocking(() -> {
       String value = GrailsSettingsService.getGrailsSettings(getModule()).properties.get(key);
       return value != null && Boolean.parseBoolean(value);
     });

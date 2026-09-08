@@ -23,10 +23,8 @@ import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.lang.ASTNode;
 import com.intellij.lang.html.HTMLLanguage;
 import com.intellij.lang.injection.InjectedLanguageManager;
-import com.intellij.lang.javascript.psi.JSElement;
 import com.intellij.lang.javascript.psi.JSFile;
 import com.intellij.lang.javascript.psi.ecmal4.XmlBackedJSClass;
-import com.intellij.lang.javascript.psi.resolve.JSResolveUtil;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeRegistry;
 import com.intellij.openapi.module.Module;
@@ -249,7 +247,7 @@ public class GspFileImpl extends PsiFileImpl implements GspFile {
 
           if (injected != null && injected != fileOfPlace) {
             ResolveState s = state.put(XmlBackedJSClass.PROCESS_XML_BACKED_CLASS_MEMBERS_HINT, Boolean.TRUE);
-            if (!JSResolveUtil.processDeclarationsInScope((JSElement)injected, processor, s, null, place)) return false;
+            if (!injected.processDeclarations(processor, s, null, place)) return false;
           }
         }
       }

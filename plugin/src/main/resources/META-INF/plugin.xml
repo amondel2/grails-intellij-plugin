@@ -385,6 +385,7 @@
     <referencesSearch implementation="org.apache.grails.intellij.plugin.spring.SpringBeanReferenceSearcher"/>
 
     <debugger.positionManagerFactory implementation="org.apache.grails.intellij.plugin.lang.gsp.debug.GspPositionManagerFactory"/>
+    <debugger.javaDebugAware implementation="org.apache.grails.intellij.plugin.lang.gsp.debug.GspJavaDebugAware"/>
 
     <defaultLiveTemplates file="liveTemplates/gsp.xml"/>
     <iconProvider implementation="org.apache.grails.intellij.plugin.projectView.GrailsIconProvider"/>

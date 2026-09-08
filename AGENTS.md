@@ -38,6 +38,9 @@ limitations under the License.
 ./gradlew verifyPlugin
 ./gradlew rat
 ./gradlew runIde
+
+# Plugin Verifier against specific builds (e.g. the next EAP) instead of the recommended set
+./gradlew verifyPlugin -PpluginVerifierIdes=IU-263.3889.65
 ```
 
 ## Critical Rules
@@ -59,9 +62,8 @@ limitations under the License.
      header** — attribution lives in `NOTICE`. The `Copyright 2000-2026 JetBrains s.r.o. and
      contributors` form the codebase was imported with is gone as of the software grant and
      must not reappear.
-   - `./etc/bin/apply-asf-headers.py --check` is the guard, and runs in the RAT workflow;
-     without `--check` it rewrites. RAT cannot do this job — both header forms are the ALv2
-     appendix to it, so it is green either way.
+   - `./gradlew rat` is the ongoing Apache 2.0 license check and runs in the RAT workflow.
+     The one-time header migration is complete; use `HEADER` for new files.
 5. **Test-fixture JDK conventions (2026.2+)** — Mock JDK 1.7 is no longer shipped:
    - **Light fixtures**: `GrailsTestCase` pins `DefaultLightProjectDescriptor(IdeaTestUtil::getMockJdk11)`
      via `getTestJdk()`. Override `getTestJdk()` to a real JDK only when the test needs
@@ -76,7 +78,7 @@ limitations under the License.
 6. **Don't add license headers to `testdata/`** — the content *is* the test input;
    headers break parser/position-sensitive tests.
 7. **No wildcard imports** — use explicit imports, matching the existing sources.
-8. **JDK is pinned via `.sdkmanrc`** (Java 25, Gradle 9.6.1) — no Gradle toolchain on
+8. **JDK is pinned via `.sdkmanrc`** (Java 25, Gradle 9.7.1) — no Gradle toolchain on
    purpose, for reproducible builds. Run `sdk env` if the build complains about the JDK.
 9. **Remove debug probes before committing** (see Debugging below).
 10. **Retry transient commit failures.** Git commits can fail with
@@ -86,10 +88,10 @@ limitations under the License.
 
 | Component | Version |
 |-----------|---------|
-| IntelliJ Platform | 2026.2 Ultimate (`sinceBuild` 262) |
+| IntelliJ Platform | 2026.2.2 Ultimate (`sinceBuild` 262.10315.125) |
 | JDK (build) | 25 (pinned in `.sdkmanrc`) |
 | JDK (`grails-rt`, `grails-compiler-patch`, `jps-plugin`) | targets Java 8/11 |
-| Gradle | 9.6.1 (wrapper) |
+| Gradle | 9.7.1 (wrapper) |
 | IntelliJ Platform Gradle Plugin | 2.x |
 | Kotlin | 2.4.x (stdlib not bundled) |
 | Tests | JUnit 4 + AssertJ + IntelliJ test framework (light/heavy fixtures) |
@@ -150,12 +152,17 @@ Special packaging: `plugin/standardDsls/` sits outside the resource roots and is
   (`buildPlugin` thrashes below that).
 - Bundled-plugin dependencies are sensitive to platform version splits — e.g.
   `com.intellij.javaee.el` is no longer transitive and `com.intellij.gradle` was split
-  out of `org.jetbrains.plugins.gradle` in 2026.2. When bumping `platformVersion`,
+  out of `org.jetbrains.plugins.gradle` in 2026.2. The JSP implementation (`com.intellij.jsp`)
+  is a pinned Marketplace dependency rather than a bundled plugin in 2026.2.2.
+  When bumping `platformVersion`,
   expect to adjust the `bundledPlugin(...)` list in `plugin/build.gradle` (and in the
   `pluginModules/*/build.gradle` that declares the affected plugin).
 - Plugin Verifier gates on real incompatibilities only (`COMPATIBILITY_PROBLEMS`,
-  `MISSING_DEPENDENCIES`, `INVALID_PLUGIN`); the inherited internal/deprecated API
-  usages are a tracked cleanup item, not a release blocker.
+  `MISSING_DEPENDENCIES`, `INVALID_PLUGIN`); the remaining internal/deprecated API
+  usages are a tracked cleanup item, not a release blocker. The per-usage lists are in
+  `plugin/build/reports/pluginVerifier/<IDE>/plugins/org.intellij.grails/<version>/*.txt`.
+  `-PpluginVerifierIdes=IU-<build>[,IU-<build>]` verifies against exactly those builds, which
+  is how a verdict against an EAP is reproduced before it becomes the recommended release.
 - The legacy plugin id `org.intellij.grails` is grandfathered on Marketplace and
   permanent (see `MIGRATION-PLAN.md`); the `TemplateWordInPluginId` check is muted
   deliberately.

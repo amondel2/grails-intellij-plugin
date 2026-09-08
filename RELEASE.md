@@ -62,7 +62,7 @@ targets:
 <platform-branch>.<minor>.<patch>        e.g. 262.0.0
 ```
 
-- **platform-branch** — the IntelliJ Platform build branch, matching `pluginSinceBuild` in
+- **platform-branch** — the IntelliJ Platform build branch, matching the first segment of `pluginSinceBuild` in
   [`gradle.properties`](gradle.properties). `262` is the 2026.2 branch.
 - **minor** — incremented for feature work within a platform branch.
 - **patch** — incremented for bug-fix-only releases within a platform branch.
