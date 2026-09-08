@@ -37,8 +37,7 @@ plugins {
 // Every exclude must carry a justification; no blanket excludes to make the audit pass.
 tasks.named('rat') { task ->
     task.excludes.addAll([
-            // planning documents, removed before the first release
-            'MIGRATION-PLAN.md',
+            // planning document, removed before the first release
             'IMPROVEMENT-PLAN.md',
             // documentation
             '**/README.md',

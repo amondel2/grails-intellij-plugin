@@ -21,7 +21,7 @@
 #   docker build -t grails-ij:testing -f etc/bin/Dockerfile .
 #   docker run -it --rm -v "$(pwd):/home/builder/project" grails-ij:testing bash
 # Then, inside the container:
-#   cd project && etc/bin/test-reproducible-build.sh
+#   etc/bin/test-reproducible-build.sh
 #
 # Keep the JDK version synced with .sdkmanrc (java=<version>-librca).
 FROM bellsoft/liberica-openjdk-debian:25.0.3
@@ -31,6 +31,19 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates curl unzip coreutils git gpg sudo psmisc locales \
     && rm -rf /var/lib/apt/lists/*
+
+# Source releases omit the wrapper JAR, so their bootstrap build needs Gradle on PATH.
+COPY .sdkmanrc /tmp/project.sdkmanrc
+RUN set -eu; \
+    GRADLE_VERSION="$(sed -n 's/^gradle=//p' /tmp/project.sdkmanrc)"; \
+    test -n "$GRADLE_VERSION"; \
+    GRADLE_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"; \
+    curl --fail --location --retry 3 "$GRADLE_URL" --output /tmp/gradle.zip; \
+    GRADLE_SHA256="$(curl --fail --location --retry 3 "${GRADLE_URL}.sha256")"; \
+    printf '%s  /tmp/gradle.zip\n' "$GRADLE_SHA256" | sha256sum --check -; \
+    unzip -q /tmp/gradle.zip -d /opt; \
+    ln -s "/opt/gradle-${GRADLE_VERSION}/bin/gradle" /usr/local/bin/gradle; \
+    rm /tmp/gradle.zip /tmp/project.sdkmanrc
 
 RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
     && dpkg-reconfigure --frontend=noninteractive locales \

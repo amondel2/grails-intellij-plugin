@@ -164,7 +164,7 @@ Special packaging: `plugin/standardDsls/` sits outside the resource roots and is
   `-PpluginVerifierIdes=IU-<build>[,IU-<build>]` verifies against exactly those builds, which
   is how a verdict against an EAP is reproduced before it becomes the recommended release.
 - The legacy plugin id `org.intellij.grails` is grandfathered on Marketplace and
-  permanent (see `MIGRATION-PLAN.md`); the `TemplateWordInPluginId` check is muted
+  permanent for the existing listing (see `IMPROVEMENT-PLAN.md`); the `TemplateWordInPluginId` check is muted
   deliberately.
 
 ## Pull Request Guidelines
