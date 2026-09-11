@@ -106,7 +106,7 @@ is a pure aggregator — it owns only RAT and coverage aggregation, no sources.
 | Path | Gradle project | Description |
 |------|----------------|-------------|
 | `plugin/` | `:plugin` | Main plugin: GSP language, Grails project support, run configs |
-| `pluginModules/{copyright,coverage,hibernate,i18n,langInjection,maven}/` | `:pluginModules-*` | Optional IntelliJ content modules (`pluginModule` deps) |
+| `pluginModules/{copyright,coverage,hibernate,i18n,jsp,langInjection,maven}/` | `:pluginModules-*` | Optional IntelliJ content modules (`pluginModule` deps) |
 | `libs/gradle-tooling/` | `:libs-gradle-tooling` | Gradle tooling API model builders |
 | `libs/grails-rt/` | `:libs-grails-rt` | Runtime injected into user apps (Java 8) |
 | `libs/testFramework/` | `:libs-testFramework` | Shared test infrastructure (`GrailsTestCase`, `GroovyProjectDescriptors`, `TestLibrary`) |

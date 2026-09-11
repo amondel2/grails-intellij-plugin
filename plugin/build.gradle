@@ -31,7 +31,10 @@ dependencies {
         bundledPlugin 'com.intellij.javaee.el' // no longer transitive in 2026.2
         bundledPlugin 'com.intellij.persistence'
         bundledPlugin 'com.intellij.javaee.jpa'
-        plugin 'com.intellij.jsp:262.10315.69' // JSP implementation is no longer bundled in 2026.2.2
+        // JspManager and TldDescriptor ship in modules of the Java plugin; the com.intellij.jsp
+        // Marketplace plugin is needed only by :pluginModules-jsp, which loads when it is present.
+        bundledModule 'intellij.jsp'
+        bundledModule 'intellij.jsp.spi'
         bundledPlugin 'com.intellij.javaee.web'
         bundledPlugin 'org.intellij.groovy'
         bundledPlugin 'com.intellij.database'
@@ -49,6 +52,7 @@ dependencies {
         pluginModule project(path: ':pluginModules-coverage')
         pluginModule project(path: ':pluginModules-hibernate')
         pluginModule project(path: ':pluginModules-i18n')
+        pluginModule project(path: ':pluginModules-jsp')
         pluginModule project(path: ':pluginModules-langInjection')
         pluginModule project(path: ':pluginModules-maven')
 
@@ -57,6 +61,7 @@ dependencies {
         testBundledPlugin 'HtmlTools'
         testBundledPlugin 'org.jetbrains.idea.maven'
         testBundledPlugin 'com.intellij.copyright' // GspCopyrightUpdaterTest
+        testPlugin 'com.intellij.jsp:262.10315.69' // TLD metadata for GspHtmlAttributesTest
 
         // .INSTANCE because these are Kotlin objects; see testFramework/build.gradle
         testFramework TestFrameworkType.Plugin.ExternalSystem.INSTANCE

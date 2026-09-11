@@ -12,11 +12,6 @@ To run the plugin:
         IntelliJ IDEA Ultimate 2026.2 or newer. The plugin depends on
         Ultimate-only functionality and will not load in IDEA Community.
 
-        The "Jakarta EE: Server Pages (JSP)" plugin (com.intellij.jsp),
-        which IntelliJ IDEA stopped bundling in 2026.2. GSP support
-        depends on it, so it has to be installed from the JetBrains
-        Marketplace.
-
 To build the plugin:
 
         JDK      Liberica 25 (25.0.3-librca), pinned in `.sdkmanrc`
