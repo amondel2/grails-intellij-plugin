@@ -62,7 +62,18 @@ public final class GrailsBackgroundService {
         return;
       }
     }
-    ProgressManager.getInstance().run(new Sequenced(next));
+    try {
+      ProgressManager.getInstance().run(new Sequenced(next));
+    }
+    catch (Throwable t) {
+      // run() hands the task off and Sequenced.onFinished() drives the queue from there. A
+      // synchronous failure - a disposed project, say - means that callback never arrives, so the
+      // queue has to be released here or nothing queued afterwards would ever start.
+      synchronized (myQueue) {
+        myRunning = false;
+      }
+      throw t;
+    }
   }
 
   public static @NotNull GrailsBackgroundService getInstance(@NotNull Project project) {

@@ -26,10 +26,10 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.util.ModificationTracker;
 import com.intellij.openapi.util.SimpleModificationTracker;
-import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -112,8 +112,7 @@ public final class GrailsApplicationManager implements ModificationTracker, Disp
 
   /** The directory the project configuration lives under: the upper bound of the walk above. */
   private @Nullable VirtualFile getProjectDir() {
-    final String basePath = myProject.getBasePath();
-    return basePath == null ? null : LocalFileSystem.getInstance().findFileByPath(basePath);
+    return ProjectUtil.guessProjectDir(myProject);
   }
 
   @Contract("null -> null")

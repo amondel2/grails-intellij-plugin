@@ -18,6 +18,10 @@ To **run** the plugin:
 
 - IntelliJ IDEA **Ultimate** 2026.2.2+ (`sinceBuild` 262.10315.125). The plugin depends on Ultimate-only
   functionality (JavaEE, Spring, database, microservices) and will not load in Community.
+- The [Jakarta EE: Server Pages (JSP)](https://plugins.jetbrains.com/plugin/13152-jakarta-ee-server-pages-jsp-)
+  plugin (`com.intellij.jsp`), which IntelliJ IDEA stopped bundling in 2026.2. GSP support depends on it,
+  so it has to come from the JetBrains Marketplace; installing Apache Grails from the Marketplace offers
+  to install it along the way.
 
 To **build** the plugin:
 

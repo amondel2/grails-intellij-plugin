@@ -51,6 +51,40 @@ public class GrailsBackgroundServiceTest extends GrailsTestCase {
                          "second.run", "second.onSuccess", "second.onFinished"), events);
   }
 
+  public void testAFailingTaskDoesNotWedgeTheQueue() {
+    List<String> events = new ArrayList<>();
+    GrailsBackgroundService service = GrailsBackgroundService.getInstance(getProject());
+    service.run(new FailingTask(getProject(), events));
+    service.run(new RecordingTask(getProject(), events, "after"));
+    assertEquals(List.of("boom.run", "boom.onThrowable", "boom.onFinished",
+                         "after.run", "after.onSuccess", "after.onFinished"), events);
+  }
+
+  private static final class FailingTask extends Task.Backgroundable {
+    private final List<String> myEvents;
+
+    FailingTask(Project project, List<String> events) {
+      super(project, "boom", false);
+      myEvents = events;
+    }
+
+    @Override
+    public void run(@NotNull ProgressIndicator indicator) {
+      myEvents.add("boom.run");
+      throw new IllegalStateException("boom");
+    }
+
+    @Override
+    public void onThrowable(@NotNull Throwable error) {
+      myEvents.add("boom.onThrowable"); // swallowed on purpose: the default implementation logs an error
+    }
+
+    @Override
+    public void onFinished() {
+      myEvents.add("boom.onFinished");
+    }
+  }
+
   private static final class RecordingTask extends Task.Backgroundable {
     private final List<String> myEvents;
     private final String myName;

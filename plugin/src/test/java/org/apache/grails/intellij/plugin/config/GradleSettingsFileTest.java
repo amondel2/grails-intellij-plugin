@@ -70,6 +70,63 @@ public class GradleSettingsFileTest extends GrailsTestCase {
     assertEquals("rootProject.name = 'shop'\ninclude 'web'\n", read("settings.gradle"));
   }
 
+  public void testAddsOnlyProjectDirWhenIncludeIsAlreadyThere() throws Exception {
+    write("settings.gradle", "rootProject.name = 'shop'\ninclude 'shop-web'\n");
+    Path module = Files.createDirectories(myRoot.resolve("apps/web"));
+    setUp(myRoot, module, "shop", "shop-web");
+    assertEquals("rootProject.name = 'shop'\ninclude 'shop-web'\nproject(':shop-web').projectDir = file('apps/web')\n",
+                 read("settings.gradle"));
+  }
+
+  public void testAddsOnlyProjectDirWhenKotlinIncludeIsAlreadyThere() throws Exception {
+    write("settings.gradle.kts", "rootProject.name = \"shop\"\ninclude(\"shop-web\")\n");
+    Path module = Files.createDirectories(myRoot.resolve("apps/web"));
+    setUp(myRoot, module, "shop", "shop-web");
+    assertEquals("rootProject.name = \"shop\"\ninclude(\"shop-web\")\nproject(\":shop-web\").projectDir = file(\"apps/web\")\n",
+                 read("settings.gradle.kts"));
+  }
+
+  public void testLeavesCompleteMappingAlone() throws Exception {
+    String mapped = "rootProject.name = 'shop'\ninclude 'shop-web'\nproject(':shop-web').projectDir = file('apps/web')\n";
+    write("settings.gradle", mapped);
+    Path module = Files.createDirectories(myRoot.resolve("apps/web"));
+    setUp(myRoot, module, "shop", "shop-web");
+    assertEquals(mapped, read("settings.gradle"));
+  }
+
+  public void testIgnoresModuleNameInComments() throws Exception {
+    write("settings.gradle", "rootProject.name = 'shop'\n// TODO: include 'shop-web'\n/* include 'shop-web' */\n");
+    Path module = Files.createDirectories(myRoot.resolve("apps/web"));
+    setUp(myRoot, module, "shop", "shop-web");
+    assertEquals("rootProject.name = 'shop'\n// TODO: include 'shop-web'\n/* include 'shop-web' */\n" +
+                 "include 'shop-web'\nproject(':shop-web').projectDir = file('apps/web')\n",
+                 read("settings.gradle"));
+  }
+
+  public void testIgnoresModuleNameInUnrelatedStatements() throws Exception {
+    write("settings.gradle", "rootProject.name = 'shop'\nincludeBuild 'shop-web'\ndef dir = 'shop-web'\n");
+    Path module = Files.createDirectories(myRoot.resolve("apps/web"));
+    setUp(myRoot, module, "shop", "shop-web");
+    assertEquals("rootProject.name = 'shop'\nincludeBuild 'shop-web'\ndef dir = 'shop-web'\n" +
+                 "include 'shop-web'\nproject(':shop-web').projectDir = file('apps/web')\n",
+                 read("settings.gradle"));
+  }
+
+  public void testLeavesLegacyPathAndRenameMappingAlone() throws Exception {
+    String legacy = "rootProject.name = 'shop'\ninclude 'apps:web'\nfindProject(':apps:web')?.name = 'shop-web'\n";
+    write("settings.gradle", legacy);
+    Path module = Files.createDirectories(myRoot.resolve("apps/web"));
+    setUp(myRoot, module, "shop", "shop-web");
+    assertEquals(legacy, read("settings.gradle"));
+  }
+
+  public void testRecognizesIncludeAmongSeveralArguments() throws Exception {
+    write("settings.gradle", "rootProject.name = 'shop'\ninclude ':core',\n        ':shop-web'\n");
+    Path module = Files.createDirectories(myRoot.resolve("shop-web"));
+    setUp(myRoot, module, "shop", "shop-web");
+    assertEquals("rootProject.name = 'shop'\ninclude ':core',\n        ':shop-web'\n", read("settings.gradle"));
+  }
+
   public void testUsesKotlinSyntaxForKotlinSettings() throws Exception {
     write("settings.gradle.kts", "rootProject.name = \"shop\"\n");
     Path module = Files.createDirectories(myRoot.resolve("modules/web"));

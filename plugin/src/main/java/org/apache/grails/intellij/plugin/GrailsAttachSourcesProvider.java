@@ -92,7 +92,9 @@ final class GrailsAttachSourcesProvider extends AbstractAttachSourceProvider {
 
     final String sourceFileName = jarNameWithoutExt + "-sources.jar";
 
-    // Discovery runs in a background read action; use the VFS without synchronous refresh.
+    // Discovery runs in a background read action, which forbids a synchronous VFS refresh, so the
+    // directory is read as the VFS has it. A sources jar dropped into $GRAILS_HOME/src from outside
+    // the IDE therefore shows up only once something else refreshes that directory.
     final VirtualFile grailsHomeSrc = grailsHome.findChild("src");
     if (grailsHomeSrc == null) {
       LOG.warn("Grails home don't contains 'scr' folder");
