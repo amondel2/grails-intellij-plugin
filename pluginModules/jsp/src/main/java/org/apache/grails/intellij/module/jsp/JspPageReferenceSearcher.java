@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.grails.intellij.plugin.lang.gsp.search;
+package org.apache.grails.intellij.module.jsp;
 
 import com.intellij.openapi.application.QueryExecutorBase;
 import com.intellij.openapi.util.text.StringUtil;

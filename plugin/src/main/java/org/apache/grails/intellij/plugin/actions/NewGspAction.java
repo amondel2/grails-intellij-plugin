@@ -20,11 +20,9 @@
 package org.apache.grails.intellij.plugin.actions;
 
 import com.intellij.ide.IdeView;
-import com.intellij.ide.actions.WeighingNewActionGroup;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.actionSystem.LangDataKeys;
-import com.intellij.openapi.actionSystem.Presentation;
 import com.intellij.openapi.util.NlsContexts.DialogMessage;
 import com.intellij.openapi.util.NlsContexts.DialogTitle;
 import com.intellij.openapi.util.text.StringUtil;
@@ -60,25 +58,6 @@ public class NewGspAction extends NewGroovyActionBase {
   @Override
   protected boolean isAvailable(DataContext dataContext) {
     return super.isAvailable(dataContext) && isInWebAppOrGrailsViewsDirectory(dataContext);
-  }
-
-  @Override
-  public void update(final @NotNull AnActionEvent e) {
-    final Presentation presentation = e.getPresentation();
-
-    super.update(e);
-
-    if (presentation.isEnabled()) {
-      final IdeView view = e.getData(LangDataKeys.IDE_VIEW);
-      if (view != null) {
-        for (PsiDirectory dir : view.getDirectories()) {
-          if (GrailsUtils.isUnderGrailsViewsDirectory(dir)) {
-            presentation.putClientProperty(WeighingNewActionGroup.WEIGHT_KEY, WeighingNewActionGroup.HIGHER_WEIGHT);
-            return;
-          }
-        }
-      }
-    }
   }
 
   private static boolean isInWebAppOrGrailsViewsDirectory(final DataContext dataContext) {

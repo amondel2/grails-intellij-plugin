@@ -110,7 +110,7 @@ public class PerspectiveFileEditorComponent extends JPanel implements UiDataProv
 
   private void update() {
     if (isShowing()) {
-      myBuilder.queueUpdate();
+      myBuilder.queryGraphUpdate().withDataReload().withRelayout().runAsync();
     }
   }
 
@@ -125,7 +125,7 @@ public class PerspectiveFileEditorComponent extends JPanel implements UiDataProv
 
   @Override
   public void reset() {
-    myBuilder.updateGraph();
+    myBuilder.queryGraphUpdate().withDataReload().withRelayout().run();
   }
 
   @Override

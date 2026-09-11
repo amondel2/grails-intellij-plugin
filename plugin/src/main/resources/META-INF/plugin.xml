@@ -41,7 +41,11 @@
     <module name="intellij.javaee.platform.impl"/>
     <plugin id="com.intellij.persistence"/>
     <plugin id="com.intellij.javaee.jpa"/>
-    <plugin id="com.intellij.jsp"/>
+    <!-- com.intellij.jsp itself is a Marketplace plugin since 2026.2; the classes the plugin uses
+         (TldDescriptor, JspManager) come from the modules the Java plugin bundles. The features
+         that need the Marketplace plugin live in the optional org.apache.grails.intellij.module.jsp. -->
+    <module name="intellij.jsp"/>
+    <module name="intellij.jsp.spi"/>
     <plugin id="com.intellij.javaee.el"/>
     <plugin id="org.intellij.groovy"/>
     <plugin id="com.intellij.properties"/>
@@ -62,6 +66,7 @@
   <content namespace="grails">
     <module name="org.apache.grails.intellij.module.copyright"/>
     <module name="org.apache.grails.intellij.module.i18n"/>
+    <module name="org.apache.grails.intellij.module.jsp"/>
     <module name="org.apache.grails.intellij.module.maven"/>
     <module name="org.apache.grails.intellij.module.hibernate"/>
     <module name="org.apache.grails.intellij.module.langInjection"/>
@@ -81,6 +86,7 @@
     <extensionPoint name="artefactHandler" dynamic="true" interface="org.apache.grails.intellij.plugin.artefact.api.GrailsArtefactHandler"/>
     <extensionPoint name="viewNodeProvider" dynamic="true" interface="org.apache.grails.intellij.plugin.projectView.api.GrailsViewNodeProvider"/>
     <extensionPoint name="gspJsInjectionTag" dynamic="true" beanClass="org.apache.grails.intellij.plugin.addins.js.GspJsInjectionTagBean"/>
+    <extensionPoint name="viewFileTypeProvider" dynamic="true" interface="org.apache.grails.intellij.plugin.fileType.GrailsViewFileTypeProvider"/>
   </extensionPoints>
 
   <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
@@ -201,8 +207,6 @@
     <externalProjectDataService implementation="org.apache.grails.intellij.plugin.gradle.GrailsModuleGradleDataService"/>
 
     <fileBasedIndex implementation="org.apache.grails.intellij.plugin.lang.gsp.gspIndex.GspIncludeIndex" />
-
-    <referencesSearch implementation="org.apache.grails.intellij.plugin.lang.gsp.search.JspPageReferenceSearcher"/> <!--j2ee plugin-->
 
     <consoleFilterProvider implementation="org.apache.grails.intellij.plugin.GrailsConsoleFilterProvider"/>
 
@@ -385,6 +389,7 @@
     <referencesSearch implementation="org.apache.grails.intellij.plugin.spring.SpringBeanReferenceSearcher"/>
 
     <debugger.positionManagerFactory implementation="org.apache.grails.intellij.plugin.lang.gsp.debug.GspPositionManagerFactory"/>
+    <debugger.javaDebugAware implementation="org.apache.grails.intellij.plugin.lang.gsp.debug.GspJavaDebugAware"/>
 
     <defaultLiveTemplates file="liveTemplates/gsp.xml"/>
     <iconProvider implementation="org.apache.grails.intellij.plugin.projectView.GrailsIconProvider"/>

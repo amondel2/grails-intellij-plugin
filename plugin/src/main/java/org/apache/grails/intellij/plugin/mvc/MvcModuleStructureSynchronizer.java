@@ -27,6 +27,7 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.DumbAware;
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.ModuleListener;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ModuleRootEvent;
@@ -34,7 +35,6 @@ import com.intellij.openapi.roots.ModuleRootListener;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.startup.ProjectActivity;
-import com.intellij.openapi.startup.StartupManager;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.SimpleModificationTracker;
 import com.intellij.openapi.util.Trinity;
@@ -250,7 +250,15 @@ public final class MvcModuleStructureSynchronizer implements Disposable {
     synchronized (myOrders) {
       myOrders.add(Pair.create(on, action));
     }
-    StartupManager.getInstance(myProject).runAfterOpened(this::scheduleRunActions);
+    // Once the project is open the order is scheduled right away, as before. Until then it waits in
+    // myOrders: MyPostStartUpActivity flushes the queue when the project opens, and runWhenSmart
+    // covers an order placed between that flush and the end of startup.
+    if (ApplicationManager.getApplication().isUnitTestMode() || myProject.isInitialized()) {
+      scheduleRunActions();
+    }
+    else {
+      DumbService.getInstance(myProject).runWhenSmart(this::scheduleRunActions);
+    }
   }
 
   private void scheduleRunActions() {

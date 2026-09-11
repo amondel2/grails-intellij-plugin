@@ -19,10 +19,10 @@
 
 package org.apache.grails.intellij.plugin.gsp;
 
-import com.intellij.jsp.impl.TldDescriptor;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.xml.XmlDocument;
 import com.intellij.testFramework.UsefulTestCase;
+import com.intellij.xml.XmlAttributeDescriptor;
 import com.intellij.xml.XmlElementDescriptor;
 import org.apache.grails.intellij.plugin.lang.gsp.psi.gsp.impl.gtag.GspTagDescriptorService;
 import org.apache.grails.intellij.lib.testFramework.GrailsTestCase;
@@ -41,17 +41,11 @@ public class GspHtmlAttributesTest extends GrailsTestCase {
    * If new SDK tags will added on grails release this test will fail.
    */
   public void testAllTagsInMap() {
-    TldDescriptor tldDescriptor = GspTagDescriptorService.getTldDescriptor(getProject());
-
     PsiFile gspFile = myFixture.addFileToProject("a.gsp", "");
 
     XmlDocument document = (XmlDocument)gspFile.getFirstChild();
 
-    Set<String> tagNames = new TreeSet<>();
-
-    for (XmlElementDescriptor d : tldDescriptor.getRootElementsDescriptors(document)) {
-      tagNames.add(d.getName());
-    }
+    Set<String> tagNames = new TreeSet<>(GspTagDescriptorService.getTldTags());
 
 
     for (XmlElementDescriptor d : document.getRootTag().getDescriptor().getElementsDescriptors(null)) {
@@ -61,6 +55,35 @@ public class GspHtmlAttributesTest extends GrailsTestCase {
 
     tagNames.removeAll(GspTagDescriptorService.getAllTags());
     UsefulTestCase.assertEmpty(tagNames);
+  }
+
+  /**
+   * The attributes of the built-in control flow tags resolve through the descriptor service,
+   * whichever of its two sources supplied them.
+   */
+  public void testBuiltInTagAttributesAreDescribed() {
+    GspTagDescriptorService service = GspTagDescriptorService.getInstance(getProject());
+
+    Set<String> each = new TreeSet<>();
+    for (XmlAttributeDescriptor descriptor : service.getAttributesDescriptors("each")) {
+      each.add(descriptor.getName());
+    }
+    UsefulTestCase.assertContainsElements(each, "in", "var", "status");
+
+    assertNotNull(service.getAttributesDescriptor("if", "test"));
+    assertNotNull(service.getAttributesDescriptor("while", "test"));
+  }
+
+  /**
+   * The fallback used when {@code com.intellij.jsp} is absent, so that the TLD's attributes stay
+   * available for completion: the file is read directly instead of through its platform metadata.
+   */
+  public void testAttributeNamesAreReadFromTheBundledTld() {
+    UsefulTestCase.assertContainsElements(GspTagDescriptorService.getTldAttributes("each"), "in", "var", "status");
+    UsefulTestCase.assertContainsElements(GspTagDescriptorService.getTldAttributes("if"), "test", "env");
+    UsefulTestCase.assertContainsElements(GspTagDescriptorService.getTldAttributes("link"), "controller", "action");
+    assertEmpty(GspTagDescriptorService.getTldAttributes("no-such-tag"));
+    assertEquals(60, GspTagDescriptorService.getTldTags().size());
   }
 
   public void testCompletion() {

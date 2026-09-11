@@ -19,8 +19,6 @@
 
 package org.apache.grails.intellij.plugin.actions;
 
-import com.intellij.jsp.highlighter.JspxFileType;
-import com.intellij.jsp.highlighter.NewJspFileType;
 import com.intellij.navigation.GotoRelatedItem;
 import com.intellij.navigation.GotoRelatedProvider;
 import com.intellij.openapi.fileTypes.FileType;
@@ -37,7 +35,7 @@ import org.jetbrains.annotations.Nullable;
 import org.apache.grails.intellij.plugin.GrailsBundle;
 import org.apache.grails.intellij.plugin.GroovyMvcIcons;
 import org.apache.grails.intellij.plugin.config.GrailsFramework;
-import org.apache.grails.intellij.plugin.fileType.GspFileType;
+import org.apache.grails.intellij.plugin.fileType.GrailsViewFileTypeProvider;
 import org.apache.grails.intellij.plugin.lang.gsp.GspFileViewProvider;
 import org.apache.grails.intellij.plugin.util.GrailsArtifact;
 import org.apache.grails.intellij.plugin.util.GrailsUtils;
@@ -128,7 +126,7 @@ public final class GrailsGotoRelatedProvider extends GotoRelatedProvider {
 
     for (VirtualFile child : gspDir.getChildren()) {
       FileType fileType = child.getFileType();
-      if (fileType == GspFileType.GSP_FILE_TYPE || fileType == NewJspFileType.INSTANCE || fileType == JspxFileType.INSTANCE) {
+      if (GrailsViewFileTypeProvider.isViewFileType(fileType)) {
         PsiFile psiFile = psiManager.findFile(child);
         if (psiFile != null) {
           res.add(new GotoRelatedItem(psiFile, GrailsBundle.message("view.group.title")));

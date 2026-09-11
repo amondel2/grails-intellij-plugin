@@ -22,7 +22,7 @@ package org.apache.grails.intellij.plugin.lang.gsp.formatter.settings;
 import com.intellij.application.options.CodeStyleAbstractConfigurable;
 import com.intellij.application.options.CodeStyleAbstractPanel;
 import com.intellij.application.options.TabbedLanguageCodeStylePanel;
-import com.intellij.openapi.options.Configurable;
+import com.intellij.psi.codeStyle.CodeStyleConfigurable;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.codeStyle.CodeStyleSettingsProvider;
 import org.jetbrains.annotations.NotNull;
@@ -34,7 +34,7 @@ import org.apache.grails.intellij.plugin.lang.gsp.GspLanguage;
  */
 public final class GspCodeStyleSettingsProvider extends CodeStyleSettingsProvider {
   @Override
-  public @NotNull Configurable createSettingsPage(@NotNull CodeStyleSettings settings, @NotNull CodeStyleSettings originalSettings) {
+  public @NotNull CodeStyleConfigurable createConfigurable(@NotNull CodeStyleSettings settings, @NotNull CodeStyleSettings originalSettings) {
     return new CodeStyleAbstractConfigurable(settings, originalSettings, GrailsBundle.message("language.gsp")) {
 
       @Override

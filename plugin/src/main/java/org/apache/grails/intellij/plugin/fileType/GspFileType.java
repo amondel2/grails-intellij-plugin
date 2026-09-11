@@ -24,7 +24,6 @@ import com.intellij.lang.LanguageParserDefinitions;
 import com.intellij.lang.ParserDefinition;
 import com.intellij.lexer.Lexer;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vfs.CharsetToolkit;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.ultimate.PluginVerifier;
@@ -38,6 +37,8 @@ import org.apache.grails.intellij.plugin.lang.gsp.lexer.core.GspTokenTypes;
 import org.apache.grails.intellij.plugin.lang.gsp.psi.gsp.impl.directive.GspDirectiveAttributeValueImpl;
 import org.jetbrains.plugins.groovy.GroovyEnabledFileType;
 
+import java.nio.charset.IllegalCharsetNameException;
+import java.nio.charset.UnsupportedCharsetException;
 import javax.swing.Icon;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -78,20 +79,26 @@ public final class GspFileType extends XmlLikeFileType implements GroovyEnabledF
   }
 
   @Override
-  public boolean isJVMDebuggingSupported() {
-    return true;
-  }
-
-  @Override
   public Charset extractCharsetFromFileContent(Project project, @Nullable VirtualFile file, @NotNull CharSequence content) {
     String name = XmlUtil.extractXmlEncodingFromProlog(content);
-    Charset charset = CharsetToolkit.forName(name);
+    Charset charset = charsetForName(name);
     if (charset != null) return charset;
 
     charset = extractCharset(content);
     if (charset != null) return charset;
 
     return StandardCharsets.UTF_8;
+  }
+
+  /** {@code Charset.forName} that answers {@code null} for a missing, malformed or unsupported name. */
+  static @Nullable Charset charsetForName(@Nullable String name) {
+    if (name == null) return null;
+    try {
+      return Charset.forName(name);
+    }
+    catch (IllegalCharsetNameException | UnsupportedCharsetException ignored) {
+      return null;
+    }
   }
 
   private static @Nullable Charset extractCharset(@NotNull CharSequence content) {
@@ -107,7 +114,7 @@ public final class GspFileType extends XmlLikeFileType implements GroovyEnabledF
         Matcher matcher = GspDirectiveAttributeValueImpl.CHARSET_PATTERN.matcher(lexer.getTokenSequence());
         if (matcher.find()) {
           String name = matcher.group(1);
-          Charset charset = CharsetToolkit.forName(name);
+          Charset charset = charsetForName(name);
           if (charset != null) {
             return charset;
           }

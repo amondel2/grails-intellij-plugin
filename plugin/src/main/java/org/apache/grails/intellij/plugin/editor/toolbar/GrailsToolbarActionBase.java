@@ -23,6 +23,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.Separator;
+import com.intellij.openapi.actionSystem.ex.ActionUtil;
 import com.intellij.openapi.util.NlsActions.ActionText;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -41,14 +42,14 @@ public abstract class GrailsToolbarActionBase extends ActionGroup {
     return ActionUpdateThread.BGT;
   }
 
-  @Override
-  public boolean displayTextInToolbar() {
-    return true;
+  protected GrailsToolbarActionBase() {
+    getTemplatePresentation().putClientProperty(ActionUtil.SHOW_TEXT_IN_TOOLBAR, true);
   }
 
   @Override
   public void update(@NotNull AnActionEvent e) {
     ArtefactData data = GrailsActionUtil.getArtefactData(e.getDataContext());
+    e.getPresentation().putClientProperty(ActionUtil.SHOW_TEXT_IN_TOOLBAR, true);
     e.getPresentation().setText(data == null ? getTemplateText() : getTitle(data));
     e.getPresentation().setPerformGroup(isOpenSingle() && data != null && createNavigateActions(data).size() == 1);
     e.getPresentation().setPopupGroup(true);
@@ -61,7 +62,7 @@ public abstract class GrailsToolbarActionBase extends ActionGroup {
     if (data == null) return;
     Collection<AnAction> actions = createNavigateActions(data);
     if (actions.size() == 1) {
-      actions.iterator().next().actionPerformed(e);
+      ActionUtil.performAction(actions.iterator().next(), e);
     }
   }
 

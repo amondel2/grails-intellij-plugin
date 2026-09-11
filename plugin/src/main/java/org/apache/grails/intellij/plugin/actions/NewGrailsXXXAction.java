@@ -20,7 +20,6 @@
 package org.apache.grails.intellij.plugin.actions;
 
 import com.intellij.ide.IdeView;
-import com.intellij.ide.actions.WeighingNewActionGroup;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -201,7 +200,6 @@ public abstract class NewGrailsXXXAction extends AnAction implements DumbAware {
     if (enabled && !e.isFromActionToolbar()) {
       presentation.setText(GrailsBundle.messagePointer(myPopupTextKey));
     }
-    presentation.putClientProperty(WeighingNewActionGroup.WEIGHT_KEY, WeighingNewActionGroup.HIGHER_WEIGHT);
   }
 
   @Override

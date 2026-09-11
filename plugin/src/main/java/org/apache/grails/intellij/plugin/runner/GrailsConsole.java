@@ -78,6 +78,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
+import kotlin.Unit;
 
 @Service(Service.Level.PROJECT)
 @State(name = "GrailsConsole", storages = @Storage(StoragePathMacros.WORKSPACE_FILE))
@@ -104,10 +105,12 @@ public final class GrailsConsole implements Disposable, PersistentStateComponent
     myConsole = (ConsoleViewImpl)TextConsoleBuilderFactory.getInstance().createBuilder(myProject).getConsole();
     Disposer.register(this, myConsole);
 
-    myToolWindow = (ToolWindowEx)ToolWindowManager.getInstance(myProject).registerToolWindow(
-      TOOL_WINDOW_ID, false, ToolWindowAnchor.BOTTOM, this, true
-    );
-    myToolWindow.setIcon(GroovyMvcIcons.Grails_13);
+    myToolWindow = (ToolWindowEx)ToolWindowManager.getInstance(myProject).registerToolWindow(TOOL_WINDOW_ID, builder -> {
+      builder.anchor = ToolWindowAnchor.BOTTOM;
+      builder.canCloseContent = false;
+      builder.icon = GroovyMvcIcons.Grails_13;
+      return Unit.INSTANCE;
+    });
     myToolWindow.setAdditionalGearActions(new DefaultActionGroup(new ToggleAction(GrailsBundle.message("action.text.auto.close.when.done")) {
 
       @Override

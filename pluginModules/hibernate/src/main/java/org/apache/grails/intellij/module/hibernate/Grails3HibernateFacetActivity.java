@@ -73,7 +73,7 @@ final class Grails3HibernateFacetActivity implements StartupActivity.DumbAware {
   private static void ensureGormFacets(@NotNull Project project) {
     if (project.isDisposed()) return;
 
-    Set<Module> modules = ReadAction.compute(() -> {
+    Set<Module> modules = ReadAction.computeBlocking(() -> {
       Set<Module> result = new LinkedHashSet<>();
       ProjectFileIndex fileIndex = ProjectFileIndex.getInstance(project);
       for (GrailsApplication application : GrailsApplicationManager.getInstance(project).getApplications()) {
@@ -108,7 +108,7 @@ final class Grails3HibernateFacetActivity implements StartupActivity.DumbAware {
   }
 
   private static boolean hasPersistenceFacet(@NotNull Module module) {
-    return ReadAction.compute(() -> {
+    return ReadAction.computeBlocking(() -> {
       FacetManager facetManager = FacetManager.getInstance(module);
       return !facetManager.getFacetsByType(HibernateFacet.ID).isEmpty()
              || !facetManager.getFacetsByType(JpaFacet.ID).isEmpty();

@@ -62,7 +62,7 @@ targets:
 <platform-branch>.<minor>.<patch>        e.g. 262.0.0
 ```
 
-- **platform-branch** — the IntelliJ Platform build branch, matching `pluginSinceBuild` in
+- **platform-branch** — the IntelliJ Platform build branch, matching the first segment of `pluginSinceBuild` in
   [`gradle.properties`](gradle.properties). `262` is the 2026.2 branch.
 - **minor** — incremented for feature work within a platform branch.
 - **patch** — incremented for bug-fix-only releases within a platform branch.
@@ -100,11 +100,10 @@ the plugin moves to a new IntelliJ Platform branch.
   the pull request, and fails.
 - The JDK is pinned by [`.sdkmanrc`](.sdkmanrc); CI reads the version from it so local and
   CI builds match. See [INSTALL](INSTALL) for local build setup.
-- No planning documents that are excluded from the license audit
-  (`MIGRATION-PLAN.md`, `IMPROVEMENT-PLAN.md`) should still be present for a final
-  release; they are listed as RAT excludes in
+- The planning document `IMPROVEMENT-PLAN.md` should not be present in a final
+  release; it is listed as a RAT exclude in
   [`org.apache.grails.intellij.build.rat.gradle`](build-logic/src/main/groovy/org.apache.grails.intellij.build.rat.gradle)
-  and are meant to be removed before the first release.
+  and is meant to be removed before the first release.
 
 ## 2. Cut the release
 
@@ -137,7 +136,7 @@ will wait for a reviewer, so they are approved one at a time in that order.
 
 1. Check out the tag, then remove files that must not ship in a source release
    (`.git`, `.github`, `.asf.yaml`, `gradlew`/`gradlew.bat`, `gradle/wrapper`, and the
-   `MIGRATION-PLAN.md` / `IMPROVEMENT-PLAN.md` planning documents).
+   `IMPROVEMENT-PLAN.md` planning document).
 2. Zip to `apache-grails-intellij-plugin-${VERSION}-src.zip`.
 3. GPG-detached-sign (`.asc`) and checksum (`.sha512`).
 4. Upload all three to the GitHub Release.
@@ -477,7 +476,8 @@ they neither modify nor depend on your keyring.
 
 The official artifacts are built on Linux in GitHub Actions. To reproduce that
 environment locally, use [`etc/bin/Dockerfile`](etc/bin/Dockerfile), which is pinned to
-the same Liberica JDK as `.sdkmanrc`:
+the same Liberica JDK as `.sdkmanrc`. The image also installs the Gradle version from
+`.sdkmanrc` on `PATH` so the extracted source release can bootstrap its own wrapper:
 
 ```bash
 docker build -t grails-ij:testing -f etc/bin/Dockerfile .

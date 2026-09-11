@@ -21,7 +21,6 @@ package org.apache.grails.intellij.plugin.mvc.plugins;
 
 import com.intellij.credentialStore.Credentials;
 import com.intellij.ide.BrowserUtil;
-import com.intellij.ide.plugins.PluginManagerMain;
 import com.intellij.ide.ui.search.SearchUtil;
 import com.intellij.ide.ui.search.SearchableOptionsRegistrar;
 import com.intellij.openapi.actionSystem.ActionGroup;
@@ -37,6 +36,7 @@ import com.intellij.openapi.util.NlsSafe;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.IdeFocusManager;
+import com.intellij.ui.BrowserHyperlinkListener;
 import com.intellij.ui.ClickListener;
 import com.intellij.ui.FilterComponent;
 import com.intellij.ui.GuiUtils;
@@ -121,7 +121,7 @@ public class MvcPluginsMain {
     myApplication = application;
     myDialogBuilder = dialogBuilder;
 
-    myDescriptionTextArea.addHyperlinkListener(new PluginManagerMain.MyHyperlinkListener());
+    myDescriptionTextArea.addHyperlinkListener(BrowserHyperlinkListener.INSTANCE);
 
     main.registerKeyboardAction(new ActionListener() {
       @Override
@@ -421,7 +421,7 @@ public class MvcPluginsMain {
 
     pluginInfoUpdate(mvcPlugin);
 
-    ApplicationManager.getApplication().invokeLater(myActionToolbar::updateActionsImmediately);
+    ApplicationManager.getApplication().invokeLater(myActionToolbar::updateActionsAsync);
   }
 
   public MvcPluginsTable getPluginTable() {

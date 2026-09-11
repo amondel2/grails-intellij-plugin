@@ -26,7 +26,6 @@ import com.intellij.openapi.util.Comparing;
 import com.intellij.openapi.util.InvalidDataException;
 import com.intellij.openapi.util.WriteExternalException;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.util.JdomKt;
 import org.jdom.Element;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
@@ -115,14 +114,14 @@ public abstract class LocatableRunConfigurationWithCommonParameters extends Loca
       }
       element.addContent(env);
     });
-    JdomKt.addOptionTag(element, "passParentEnv", Boolean.toString(myPassParentEnv), "setting");
+    writeSetting(element, "passParentEnv", Boolean.toString(myPassParentEnv));
   }
 
   /**
    * Writes a {@code <setting name=".." value=".."/>} child element, matching the legacy
    * {@code JDOMExternalizer.write} XML format so persisted run configurations stay compatible.
    */
-  protected static void writeSetting(@NotNull Element root, @NotNull String name, @Nullable String value) {
+  public static void writeSetting(@NotNull Element root, @NotNull String name, @Nullable String value) {
     Element setting = new Element("setting");
     setting.setAttribute("name", name);
     setting.setAttribute("value", value == null ? "" : value);

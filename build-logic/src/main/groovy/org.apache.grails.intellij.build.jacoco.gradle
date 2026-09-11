@@ -27,7 +27,7 @@ plugins {
 
 jacoco {
     // keep in sync with `jacocoVersion` in gradle.properties
-    toolVersion = providers.gradleProperty('jacocoVersion').getOrElse('0.8.14')
+    toolVersion = providers.gradleProperty('jacocoVersion').getOrElse('0.8.15')
 }
 
 tasks.withType(Test).configureEach {

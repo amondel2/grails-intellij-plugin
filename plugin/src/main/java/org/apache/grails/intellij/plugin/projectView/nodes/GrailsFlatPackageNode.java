@@ -19,6 +19,7 @@
 
 package org.apache.grails.intellij.plugin.projectView.nodes;
 
+import com.intellij.icons.AllIcons;
 import com.intellij.ide.projectView.PresentationData;
 import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.util.treeView.TreeViewUtil;
@@ -27,8 +28,6 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiPackage;
-import com.intellij.ui.IconManager;
-import com.intellij.ui.PlatformIcons;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Collection;
@@ -50,7 +49,7 @@ class GrailsFlatPackageNode extends GrailsArtefactPackageNode<GrailsPackageValue
 
   @Override
   protected void update(@NotNull PresentationData presentation) {
-    presentation.setIcon(IconManager.getInstance().getPlatformIcon(PlatformIcons.Package));
+    presentation.setIcon(AllIcons.Nodes.Package);
     String presentableText = packageFqn;
     if (getSettings().isAbbreviatePackageNames()) {
       PsiPackage psiPackage = JavaPsiFacade.getInstance(Objects.requireNonNull(getProject())).findPackage(packageFqn);

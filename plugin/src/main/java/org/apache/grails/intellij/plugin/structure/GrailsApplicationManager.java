@@ -26,6 +26,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.util.ModificationTracker;
 import com.intellij.openapi.util.SimpleModificationTracker;
@@ -66,7 +67,7 @@ public final class GrailsApplicationManager implements ModificationTracker, Disp
   public GrailsApplicationManager(@NotNull Project project) {
     myProject = project;
     myFileIndex = ProjectFileIndex.getInstance(project);
-    GrailsApplicationProvider.APPLICATION_PROVIDER.addChangeListener(() -> {
+    GrailsApplicationProvider.APPLICATION_PROVIDER.getPoint().addChangeListener(() -> {
       if (project.isDisposed()) {
         return;
       }
@@ -100,12 +101,18 @@ public final class GrailsApplicationManager implements ModificationTracker, Disp
   @Contract("null -> null")
   public @Nullable GrailsApplication findApplication(@Nullable VirtualFile file) {
     if (file == null || !hasApplications()) return null;
+    final VirtualFile projectDir = getProjectDir();
     for (VirtualFile currentFile = myFileIndex.getContentRootForFile(file); currentFile != null; currentFile = currentFile.getParent()) {
       final GrailsApplication application = getApplicationByRoot(currentFile);
       if (application != null) return application;
-      if (currentFile.equals(myProject.getBaseDir())) break;
+      if (currentFile.equals(projectDir)) break;
     }
     return null;
+  }
+
+  /** The directory the project configuration lives under: the upper bound of the walk above. */
+  private @Nullable VirtualFile getProjectDir() {
+    return ProjectUtil.guessProjectDir(myProject);
   }
 
   @Contract("null -> null")
@@ -122,7 +129,10 @@ public final class GrailsApplicationManager implements ModificationTracker, Disp
       LOG.debug("Update queued from " + new Throwable().getStackTrace()[2]);
     }
 
-    return ReadAction.nonBlocking(this::doUpdate)
+    return ReadAction.nonBlocking(() -> {
+        doUpdate();
+        return null;
+      })
       .inSmartMode(myProject)
       .expireWith(this)
       .submit(ourExecutorService);
