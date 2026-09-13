@@ -41,6 +41,7 @@ import org.apache.grails.intellij.plugin.fileType.GspFileType;
 import org.apache.grails.intellij.plugin.lang.gsp.GspFileViewProvider;
 import org.apache.grails.intellij.plugin.util.GrailsArtifact;
 import org.apache.grails.intellij.plugin.util.GrailsUtils;
+import org.apache.grails.intellij.plugin.util.UltimatePluginGuard;
 import org.jetbrains.plugins.groovy.lang.psi.GroovyFile;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.typedef.GrClassDefinition;
 import org.jetbrains.plugins.groovy.util.GroovyUtils;
@@ -128,13 +129,21 @@ public final class GrailsGotoRelatedProvider extends GotoRelatedProvider {
 
     for (VirtualFile child : gspDir.getChildren()) {
       FileType fileType = child.getFileType();
-      if (fileType == GspFileType.GSP_FILE_TYPE || fileType == NewJspFileType.INSTANCE || fileType == JspxFileType.INSTANCE) {
+      if (fileType == GspFileType.GSP_FILE_TYPE || isJspViewFile(fileType)) {
         PsiFile psiFile = psiManager.findFile(child);
         if (psiFile != null) {
           res.add(new GotoRelatedItem(psiFile, GrailsBundle.message("view.group.title")));
         }
       }
     }
+  }
+
+  /** JSP/JSPX view files only make sense on the Ultimate plugin that defines them. */
+  private static boolean isJspViewFile(@NotNull FileType fileType) {
+    return UltimatePluginGuard.callIfPluginAvailable(
+      UltimatePluginGuard.JSP_PLUGIN,
+      () -> fileType == NewJspFileType.INSTANCE || fileType == JspxFileType.INSTANCE,
+      false);
   }
 
   private static Collection<GrClassDefinition> addAll(Module module, String name, GrailsArtifact artifact, List<GotoRelatedItem> res) {

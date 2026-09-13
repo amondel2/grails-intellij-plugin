@@ -31,6 +31,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.apache.grails.intellij.plugin.spring.GrailsResourcesGroovyMemberContributor;
 import org.apache.grails.intellij.plugin.util.GrailsUtils;
+import org.apache.grails.intellij.plugin.util.UltimatePluginGuard;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.GrField;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.blocks.GrClosableBlock;
 import org.jetbrains.plugins.groovy.lang.resolve.NonCodeMembersContributor;
@@ -67,12 +68,14 @@ final class GrailsPluginClassMemberContributor extends NonCodeMembersContributor
     GrClosableBlock closure = PsiTreeUtil.getParentOfType(place, GrClosableBlock.class);
     if (closure != null) {
       if (isDoWithSpringClosure(closure, aClass)) {
-        if (!GrailsResourcesGroovyMemberContributor.processBeanDefinition(processor, place, state, closure, null)) return;
+        if (UltimatePluginGuard.isPluginAvailable(UltimatePluginGuard.SPRING_PLUGIN)
+            && !GrailsResourcesGroovyMemberContributor.processBeanDefinition(processor, place, state, closure, null)) return;
       }
       else {
         GrClosableBlock parentClosure = PsiTreeUtil.getParentOfType(closure, GrClosableBlock.class);
         if (parentClosure != null && isDoWithSpringClosure(parentClosure, aClass)) {
-          if (!GrailsResourcesGroovyMemberContributor.processBeanDefinition(processor, place, state, parentClosure, closure)) return;
+          if (UltimatePluginGuard.isPluginAvailable(UltimatePluginGuard.SPRING_PLUGIN)
+              && !GrailsResourcesGroovyMemberContributor.processBeanDefinition(processor, place, state, parentClosure, closure)) return;
         }
       }
     }

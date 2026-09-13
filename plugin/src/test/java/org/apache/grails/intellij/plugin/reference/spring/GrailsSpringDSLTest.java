@@ -24,7 +24,14 @@ import com.intellij.psi.PsiFile;
 import org.jetbrains.plugins.groovy.codeInspection.assignment.GroovyAssignabilityCheckInspection;
 import org.apache.grails.intellij.lib.testFramework.Grails14TestCase;
 import org.apache.grails.intellij.lib.testFramework.GrailsTestCase;
+import org.apache.grails.intellij.lib.testFramework.UltimateOnlyTest;
+import org.junit.experimental.categories.Category;
 
+/**
+ * Spring bean DSL resolution rides on the Ultimate-only Spring integration, so this class is
+ * excluded from the Community Edition test run.
+ */
+@Category(UltimateOnlyTest.class)
 public class GrailsSpringDSLTest extends Grails14TestCase {
   public void testResolveResourcesGroovy() {
     addSimpleGroovyFile("class Foo1 { String name; def xxx }");

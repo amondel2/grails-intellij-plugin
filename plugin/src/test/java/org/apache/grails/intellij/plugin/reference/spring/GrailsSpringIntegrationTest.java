@@ -34,10 +34,18 @@ import org.apache.grails.intellij.plugin.fileType.GspFileType;
 import org.jetbrains.plugins.groovy.GroovyLanguage;
 import org.apache.grails.intellij.lib.testFramework.GrailsTestUtil;
 import org.apache.grails.intellij.lib.testFramework.HddGrailsTestCase;
+import org.apache.grails.intellij.lib.testFramework.UltimateOnlyTest;
+import org.junit.experimental.categories.Category;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.literals.GrLiteral;
 
 import java.util.List;
 
+/**
+ * Spring facet integration (Grails resources.groovy beans against the real Spring plugin).
+ * The `com.intellij.spring` plugin is Ultimate-only, so this class is excluded from the
+ * Community Edition test run.
+ */
+@Category(UltimateOnlyTest.class)
 public class GrailsSpringIntegrationTest extends HddGrailsTestCase {
   public void testGetBeanCompletion() {
     assertNotNull(SpringFacet.getInstance(getModule()));

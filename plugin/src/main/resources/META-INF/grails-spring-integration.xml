@@ -1,0 +1,45 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<!--
+  Optional integration with the Spring Support plugin (Ultimate only). Loaded only when
+  com.intellij.spring is present (see the matching <depends config-file> in plugin.xml).
+  The intellij.spring/intellij.spring.core modules ship inside com.intellij.spring.
+-->
+<idea-plugin>
+  <extensions defaultExtensionNs="org.intellij.grails">
+    <facetProvider implementation="org.apache.grails.intellij.plugin.spring.GrailsSpringFacetProvider"/>
+  </extensions>
+
+  <extensions defaultExtensionNs="org.intellij.groovy">
+    <membersContributor implementation="org.apache.grails.intellij.plugin.spring.GrailsWebApplicationContextMembersContributor"/>
+    <membersContributor implementation="org.apache.grails.intellij.plugin.spring.GrailsResourcesGroovyMemberContributor"/>
+    <variableEnhancer implementation="org.apache.grails.intellij.plugin.spring.InjectedSpringBeanProvider"/>
+  </extensions>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <renamePsiElementProcessor implementation="org.apache.grails.intellij.plugin.spring.GrLightVariableRenameProcessor" id="GrLightVariableRenameProcessor"/>
+    <spring.customModuleComponentsDiscoverer implementation="org.apache.grails.intellij.plugin.spring.GrailsSpringBeanDiscoverer"/>
+    <codeInsight.lineMarkerProvider language="Groovy" implementationClass="org.apache.grails.intellij.plugin.spring.SpringInjectionAnnotator"/>
+    <completion.contributor language="Groovy" implementationClass="org.apache.grails.intellij.plugin.spring.GrailsInjectedBeanCompletionContributor" order="before groovyBasic"/>
+    <aliasingPsiTargetMapper implementation="org.apache.grails.intellij.plugin.spring.SpringGrailsTargetMapper"/>
+    <aliasingPsiTargetMapper implementation="org.apache.grails.intellij.plugin.spring.GrailsSpringStereotypeAliasingPsiTargetMapper"/>
+    <referencesSearch implementation="org.apache.grails.intellij.plugin.spring.SpringBeanReferenceSearcher"/>
+    <semContributor implementation="org.apache.grails.intellij.plugin.spring.GrailsSpringSemContributor"/>
+  </extensions>
+</idea-plugin>

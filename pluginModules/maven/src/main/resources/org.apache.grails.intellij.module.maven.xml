@@ -16,23 +16,15 @@
   specific language governing permissions and limitations
   under the License.
 -->
+<!--
+  Optional content module: skipped when org.jetbrains.idea.maven is absent (e.g. Community
+  Edition). The actual extension registrations live in the main plugin's optional
+  META-INF/grails-maven-integration.xml config-file.
+-->
 <idea-plugin>
 
   <dependencies>
     <plugin id="org.jetbrains.idea.maven"/>
   </dependencies>
 
-  <extensions defaultExtensionNs="org">
-    <intellij.grails.commandExecutor implementation="org.apache.grails.intellij.module.maven.MavenCommandExecutor" order="FIRST"/>
-    <intellij.grails.applicationProvider implementation="org.apache.grails.intellij.module.maven.GrailsMavenApplicationProvider" order="first"/>
-    <intellij.grails.viewNodeProvider implementation="org.apache.grails.intellij.module.maven.MavenNodeProvider"/>
-  </extensions>
-
-  <extensions defaultExtensionNs="org.jetbrains.idea.maven.importing">
-    <workspaceConfigurator implementation="org.apache.grails.intellij.module.maven.GrailsMavenWorkspaceConfigurator"/>
-  </extensions>
-
-  <extensions defaultExtensionNs="com.intellij">
-    <programRunner implementation="org.apache.grails.intellij.module.maven.GrailsMavenDebuggerRunner" order="before grailsDebuggerRunner"/>
-  </extensions>
 </idea-plugin>
