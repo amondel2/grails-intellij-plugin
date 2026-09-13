@@ -19,9 +19,9 @@
 <!--
   Optional integration with the Java EE / Ultimate platform. Loaded only when com.intellij.javaee
   is present (see the matching <depends config-file> in plugin.xml). Carries the web-facet
-  provider (com.intellij.javaee.web), JSP page reference search (com.intellij.jsp) and the
-  database data-source detector (com.intellij.database); all three ship inside the Java EE
-  Ultimate distribution.
+  provider (com.intellij.javaee.web) and the database data-source detector (com.intellij.database),
+  both shipped inside the Java EE Ultimate distribution. JSP page reference search moved to the
+  optional org.apache.grails.intellij.module.jsp content module (see GrailsViewFileTypeProvider).
 -->
 <idea-plugin>
   <extensions defaultExtensionNs="org.intellij.grails">
@@ -29,7 +29,6 @@
   </extensions>
 
   <extensions defaultExtensionNs="com.intellij">
-    <referencesSearch implementation="org.apache.grails.intellij.plugin.lang.gsp.search.JspPageReferenceSearcher"/>
     <database.dataSourceDetector implementation="org.apache.grails.intellij.plugin.database.GrailsDataSourceDetector"/>
   </extensions>
 </idea-plugin>

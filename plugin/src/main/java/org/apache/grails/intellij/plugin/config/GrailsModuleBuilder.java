@@ -19,7 +19,6 @@
 
 package org.apache.grails.intellij.plugin.config;
 
-import com.intellij.execution.ExecutionBundle;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.configurations.JavaParameters;
@@ -33,15 +32,16 @@ import com.intellij.openapi.module.JavaModuleType;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleType;
 import com.intellij.openapi.options.ConfigurationException;
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.JavaSdkType;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.projectRoots.SdkTypeId;
 import com.intellij.openapi.roots.ModifiableRootModel;
 import com.intellij.openapi.roots.ProjectRootManager;
-import com.intellij.openapi.startup.StartupManager;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.io.FileUtil;
+import com.intellij.openapi.util.io.NioFiles;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -103,7 +103,7 @@ public final class GrailsModuleBuilder extends GrailsGradleAwareModuleBuilder {
   protected void setupModule(final @NotNull Module module) throws ConfigurationException {
     super.setupModule(module);
     final Project project = module.getProject();
-    StartupManager.getInstance(project).runWhenProjectIsInitialized(() -> {
+    DumbService.getInstance(project).runWhenSmart(() -> {
       try {
         if (module.isDisposed()) return;
         GrailsConsole.getInstance(project);
@@ -187,7 +187,7 @@ public final class GrailsModuleBuilder extends GrailsGradleAwareModuleBuilder {
     final Runnable onDone = () -> {
       try {
         FileUtil.copyDirContent(parameters.second.toFile(), rootModuleContent.toNioPath().toFile());
-        FileUtil.delete(parameters.second);
+        NioFiles.deleteRecursively(parameters.second);
 
         LocalFileSystem.getInstance().refresh(true);
       }
@@ -218,7 +218,7 @@ public final class GrailsModuleBuilder extends GrailsGradleAwareModuleBuilder {
     if (myOptions != null) ContainerUtil.addAll(command.getArgs(), myOptions.split(" "));
 
     final Sdk sdk = getModuleJdk() == null ? ProjectRootManager.getInstance(project).getProjectSdk() : getModuleJdk();
-    if (sdk == null) throw new ExecutionException(ExecutionBundle.message("no.jdk.for.module.error.message", module.getName()));
+    if (sdk == null) throw new ExecutionException(GrailsBundle.message("dialog.message.no.jdk.for.module", module.getName()));
 
     final JavaParameters params = getExecutor().createJavaParameters(sdk, myGrailsSDK, command);
     params.setWorkingDirectory(directory.toFile().getAbsolutePath());

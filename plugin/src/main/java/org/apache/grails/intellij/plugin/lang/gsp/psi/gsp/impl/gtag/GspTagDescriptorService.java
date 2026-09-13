@@ -21,20 +21,22 @@ package org.apache.grails.intellij.plugin.lang.gsp.psi.gsp.impl.gtag;
 
 import com.intellij.jsp.impl.TldDescriptor;
 import com.intellij.lang.html.HTMLLanguage;
+import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.JDOMUtil;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Pair;
-import com.intellij.openapi.vfs.JarFileSystem;
-import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiFileFactory;
 import com.intellij.psi.PsiManager;
-import com.intellij.psi.xml.XmlDocument;
 import com.intellij.psi.xml.XmlFile;
 import com.intellij.psi.xml.XmlTag;
-import com.intellij.util.PathUtil;
+import com.intellij.psi.xml.XmlDocument;
 import com.intellij.xml.XmlAttributeDescriptor;
 import com.intellij.xml.XmlElementDescriptor;
+import com.intellij.xml.impl.schema.AnyXmlAttributeDescriptor;
+import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -42,12 +44,32 @@ import org.apache.grails.intellij.plugin.fileType.GspFileType;
 import org.apache.grails.intellij.plugin.lang.gsp.resolve.taglib.GspTagLibUtil;
 import org.apache.grails.intellij.plugin.util.GrailsUtils;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
 public class GspTagDescriptorService {
+
+  private static final Logger LOG = Logger.getInstance(GspTagDescriptorService.class);
+
+  private static final String TLD_PATH = "/org/jetbrains/plugins/grails/lang/gsp/resolve/taglib/tld/grails.tld";
+
+  /**
+   * Attribute names per tag, read straight out of the bundled {@code grails.tld}.
+   * <p>
+   * The file is a static snapshot shipped with the plugin rather than anything generated from the
+   * project, so it is parsed once per class loader. Reading it here instead of through the
+   * platform's {@code TldDescriptor} keeps these descriptors available when the Marketplace
+   * {@code com.intellij.jsp} plugin, which contributes that metadata, is not installed.
+   */
+  private static final Map<String, List<String>> TLD_ATTRIBUTES = loadTldAttributes();
 
   private static final Map<String, TagDescriptor> tagMap = new LinkedHashMap<>();
   static {
@@ -129,46 +151,67 @@ public class GspTagDescriptorService {
   private final Map<String, Pair<XmlAttributeDescriptor[], Map<String, XmlAttributeDescriptor>>> myTagDescriptors;
 
   public GspTagDescriptorService(Project project) {
-    PsiFile gspFile = PsiFileFactory.getInstance(project).createFileFromText("dummy.gsp", GspFileType.GSP_FILE_TYPE, "");
-
     Map<String, XmlAttributeDescriptor[]> htmlTagAttributes = getHtmlTagAttributes(project);
 
     Map<String, Pair<XmlAttributeDescriptor[], Map<String, XmlAttributeDescriptor>>> tagDescriptors = new HashMap<>();
 
     TldDescriptor descriptor = getTldDescriptor(project);
     if (descriptor != null) {
+      PsiFile gspFile = PsiFileFactory.getInstance(project).createFileFromText("dummy.gsp", GspFileType.GSP_FILE_TYPE, "");
       XmlDocument document = (XmlDocument)gspFile.getFirstChild();
       assert document != null;
       XmlTag gspRootTag = (XmlTag)document.getFirstChild().getNextSibling();
 
       for (XmlElementDescriptor elementDescriptor : descriptor.getRootElementsDescriptors(document)) {
         String tagName = elementDescriptor.getName();
+        Map<String, XmlAttributeDescriptor> attrMap = htmlAttributesOf(tagName, htmlTagAttributes);
 
-        Map<String, XmlAttributeDescriptor> attrMap = new LinkedHashMap<>();
-
-        TagDescriptor tagDescriptor = tagMap.get(tagName);
-        if (tagDescriptor != null) {
-          XmlAttributeDescriptor[] htmlAttr = htmlTagAttributes.get(tagDescriptor.htmlTag);
-          for (XmlAttributeDescriptor attrDescr : htmlAttr) {
-            attrMap.put(attrDescr.getName(), attrDescr);
-          }
-
-          for (String excluded : tagDescriptor.excludedAttributes) {
-            attrMap.remove(excluded);
-          }
-        }
-
+        // these descriptors point back at their <attribute> element in grails.tld, which is what
+        // makes a named argument of an SDK tag navigable
         for (XmlAttributeDescriptor attrDescr : elementDescriptor.getAttributesDescriptors(gspRootTag)) {
           attrMap.put(attrDescr.getName(), attrDescr);
         }
 
-        XmlAttributeDescriptor[] allAttributes = attrMap.values().toArray(XmlAttributeDescriptor.EMPTY);
+        tagDescriptors.put(tagName, Pair.create(attrMap.values().toArray(XmlAttributeDescriptor.EMPTY), attrMap));
+      }
+    }
+    else {
+      // No TLD metadata: com.intellij.jsp contributes it and is a Marketplace plugin since 2026.2.
+      // The attribute names come out of the bundled file directly instead, so completion still
+      // works; only navigation into grails.tld is lost, and the HTML descriptor of an attribute of
+      // the same name is the richer one, so the TLD only fills in the names it alone knows.
+      for (Map.Entry<String, List<String>> entry : TLD_ATTRIBUTES.entrySet()) {
+        String tagName = entry.getKey();
+        Map<String, XmlAttributeDescriptor> attrMap = htmlAttributesOf(tagName, htmlTagAttributes);
 
-        tagDescriptors.put(tagName, Pair.create(allAttributes, attrMap));
+        for (String attributeName : entry.getValue()) {
+          attrMap.putIfAbsent(attributeName, new AnyXmlAttributeDescriptor(attributeName));
+        }
+
+        tagDescriptors.put(tagName, Pair.create(attrMap.values().toArray(XmlAttributeDescriptor.EMPTY), attrMap));
       }
     }
 
     myTagDescriptors = tagDescriptors;
+  }
+
+  /** The attributes of the HTML element the tag renders, if it is one of the tags we know. */
+  private static @NotNull Map<String, XmlAttributeDescriptor> htmlAttributesOf(@NotNull String tagName,
+                                                                              @NotNull Map<String, XmlAttributeDescriptor[]> htmlTagAttributes) {
+    Map<String, XmlAttributeDescriptor> attrMap = new LinkedHashMap<>();
+
+    TagDescriptor tagDescriptor = tagMap.get(tagName);
+    if (tagDescriptor == null) return attrMap;
+
+    for (XmlAttributeDescriptor attrDescr : htmlTagAttributes.get(tagDescriptor.htmlTag)) {
+      attrMap.put(attrDescr.getName(), attrDescr);
+    }
+
+    for (String excluded : tagDescriptor.excludedAttributes) {
+      attrMap.remove(excluded);
+    }
+
+    return attrMap;
   }
 
   private static Map<String, XmlAttributeDescriptor[]> getHtmlTagAttributes(Project project) {
@@ -206,6 +249,52 @@ public class GspTagDescriptorService {
     return tagMap.keySet();
   }
 
+  /** The tags the bundled {@code grails.tld} declares. */
+  @TestOnly
+  public static Set<String> getTldTags() {
+    return TLD_ATTRIBUTES.keySet();
+  }
+
+  /** The attribute names the bundled {@code grails.tld} declares for {@code tagName}. */
+  @TestOnly
+  public static @NotNull List<String> getTldAttributes(@NotNull String tagName) {
+    return TLD_ATTRIBUTES.getOrDefault(tagName, Collections.emptyList());
+  }
+
+  private static @NotNull Map<String, List<String>> loadTldAttributes() {
+    try (InputStream stream = GspTagLibUtil.class.getResourceAsStream(TLD_PATH)) {
+      if (stream == null) {
+        LOG.error("Bundled TLD not found: " + TLD_PATH);
+        return Collections.emptyMap();
+      }
+
+      Map<String, List<String>> res = new LinkedHashMap<>();
+      for (Element tag : JDOMUtil.load(stream).getChildren()) {
+        if (!"tag".equals(tag.getName())) continue;
+
+        String tagName = null;
+        List<String> attributes = new ArrayList<>();
+        for (Element child : tag.getChildren()) {
+          if ("name".equals(child.getName())) {
+            tagName = child.getTextTrim();
+          }
+          else if ("attribute".equals(child.getName())) {
+            for (Element attribute : child.getChildren()) {
+              if ("name".equals(attribute.getName())) attributes.add(attribute.getTextTrim());
+            }
+          }
+        }
+
+        if (tagName != null && !tagName.isEmpty()) res.put(tagName, List.copyOf(attributes));
+      }
+      return Collections.unmodifiableMap(res);
+    }
+    catch (IOException | org.jdom.JDOMException e) {
+      LOG.error("Cannot read the bundled TLD: " + TLD_PATH, e);
+      return Collections.emptyMap();
+    }
+  }
+
   private static final class TagDescriptor {
     public final String htmlTag;
 
@@ -234,26 +323,26 @@ public class GspTagDescriptorService {
   }
 
   public static @Nullable TldDescriptor getTldDescriptor(Project project) {
-    PsiFile psiFile = PsiManager.getInstance(project).findFile(getTldFile());
+    VirtualFile tldFile = getTldFile();
+    if (tldFile == null) return null;
+
+    PsiFile psiFile = PsiManager.getInstance(project).findFile(tldFile);
     if (!(psiFile instanceof XmlFile)) return null;
 
     return GrailsUtils.getTldDescriptor((XmlFile)psiFile);
   }
 
-  public static @NotNull VirtualFile getTldFile() {
-    String path = PathUtil.getJarPathForClass(GspTagLibUtil.class);
-
-    VirtualFile tldFile;
-
-    if (path.endsWith(".jar")) {
-      tldFile = JarFileSystem.getInstance().findFileByPath(path + "!/org/jetbrains/plugins/grails/lang/gsp/resolve/taglib/tld/grails.tld");
-    }
-    else {
-      tldFile = LocalFileSystem.getInstance().findFileByPath(path + "/org/jetbrains/plugins/grails/lang/gsp/resolve/taglib/tld/grails.tld");
-    }
-
-    assert tldFile != null;
-
-    return tldFile;
+  /**
+   * The bundled {@code grails.tld}, located through the class loader so that it is found whether
+   * the plugin runs from its jar or from a classes directory.
+   * <p>
+   * Returns null rather than failing when the VFS does not hold the file: this runs inside a cached
+   * value computation, where a synchronous refresh is not allowed, and the callers fall back to the
+   * built-in tag descriptors. The descriptor is only ever built when the {@code com.intellij.jsp}
+   * plugin is installed anyway, since it contributes the TLD metadata.
+   */
+  private static @Nullable VirtualFile getTldFile() {
+    URL url = GspTagLibUtil.class.getResource(TLD_PATH);
+    return url == null ? null : VfsUtil.findFileByURL(url);
   }
 }

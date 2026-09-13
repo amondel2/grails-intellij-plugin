@@ -33,6 +33,7 @@ import org.apache.grails.intellij.plugin.structure.GrailsApplication;
 import java.util.Collection;
 
 import static org.apache.grails.intellij.plugin.structure.GrailsApplications.COMPARATOR;
+import javax.swing.JList;
 
 public class GrailsApplicationCombobox extends ComboBox<GrailsApplication> {
 
@@ -60,18 +61,25 @@ public class GrailsApplicationCombobox extends ComboBox<GrailsApplication> {
       }
     };
     search.setupListeners();
-    setRenderer(SimpleListCellRenderer.create((label, grailsApplication, index) -> {
-      if (grailsApplication == null) {
-        label.setText(GrailsBundle.message("combobox.label.none.selected"));
+    setRenderer(new SimpleListCellRenderer<>() {
+      @Override
+      public void customize(@NotNull JList<? extends GrailsApplication> list,
+                            GrailsApplication grailsApplication,
+                            int index,
+                            boolean selected,
+                            boolean hasFocus) {
+        if (grailsApplication == null) {
+          setText(GrailsBundle.message("combobox.label.none.selected"));
+        }
+        else {
+          setIcon(grailsApplication.getIcon());
+          @NlsSafe String applicationName = grailsApplication.getName();
+          setText(applicationName);
+          @NlsSafe String path = grailsApplication.getRoot().getPath();
+          setToolTipText(path);
+        }
       }
-      else {
-        label.setIcon(grailsApplication.getIcon());
-        @NlsSafe String applicationName = grailsApplication.getName();
-        label.setText(applicationName);
-        @NlsSafe String path = grailsApplication.getRoot().getPath();
-        label.setToolTipText(path);
-      }
-    }));
+    });
   }
 
   public void disallowEmptySelection() {

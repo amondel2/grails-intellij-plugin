@@ -48,7 +48,7 @@ intellijPlatform {
 
     pluginVerification {
         // the legacy plugin id org.intellij.grails is grandfathered on Marketplace and
-        // permanent (see MIGRATION-PLAN.md decision 2); mute the new-plugin naming check
+        // permanent for the existing listing; mute the new-plugin naming check
         freeArgs = ['-mute', 'TemplateWordInPluginId']
         // gate on real incompatibilities only; the inherited internal/deprecated API
         // usages are a tracked cleanup item, not a release blocker
@@ -58,7 +58,19 @@ intellijPlatform {
                 VerifyPluginTask.FailureLevel.INVALID_PLUGIN,
         ]
         ides {
-            recommended()
+            // -PpluginVerifierIdes=IU-263.3889.65[,IU-...] verifies against exactly those builds
+            // instead of the Marketplace-recommended set, which is how a verdict against an EAP
+            // is reproduced (and fixed) before that EAP becomes the recommended release. CI
+            // passes nothing and stays on the recommended set.
+            def requestedIdes = providers.gradleProperty('pluginVerifierIdes')
+            if (requestedIdes.isPresent()) {
+                requestedIdes.get().split(',')*.trim().findAll().each { String notation ->
+                    def (String type, String version) = notation.split('-', 2)
+                    create(type, version)
+                }
+            } else {
+                recommended()
+            }
 
             // Community Edition verification is opt-in via -PplatformEdition=IC so the default
             // verifyPlugin run (Ultimate, just above) never downloads a Community distribution.

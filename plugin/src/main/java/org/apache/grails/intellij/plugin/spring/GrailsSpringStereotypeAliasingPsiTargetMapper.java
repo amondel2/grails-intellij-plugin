@@ -20,7 +20,6 @@
 package org.apache.grails.intellij.plugin.spring;
 
 import com.intellij.openapi.application.ReadAction;
-import com.intellij.openapi.project.DumbService;
 import com.intellij.pom.PomTarget;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiTarget;
@@ -46,28 +45,29 @@ public final class GrailsSpringStereotypeAliasingPsiTargetMapper implements Alia
       return Collections.emptySet();
     }
 
-    return ReadAction.compute(() -> {
+    // Callers hold no read lock here, and the Spring model requires indexes; a read action that
+    // throws IndexNotReadyException in dumb mode is what DumbService.runReadActionInSmartMode did
+    // when nested in one, so this is the same behaviour without the deprecated wrapper.
+    return ReadAction.computeBlocking(() -> {
       final PsiClass psiClass = (PsiClass)psiTarget;
       if (psiClass.isInterface()) return Collections.emptySet();
 
-      return DumbService.getInstance(psiClass.getProject()).runReadActionInSmartMode(() -> {
-        if (!SpringCommonUtils.isSpringBeanCandidateClassInSpringProject(psiClass)) {
-          return Collections.emptySet();
-        }
+      if (!SpringCommonUtils.isSpringBeanCandidateClassInSpringProject(psiClass)) {
+        return Collections.emptySet();
+      }
 
-        final SpringJavaClassInfo info = SpringJavaClassInfo.getSpringJavaClassInfo(psiClass);
-        final List<JamSpringBeanPointer> stereotypeMappedBeans = info.resolve().getStereotypeMappedBeans();
-        for (JamSpringBeanPointer pointer : stereotypeMappedBeans) {
-          JamPsiMemberSpringBean<?> stereotypeElement = pointer.getSpringBean();
-          if (stereotypeElement instanceof SpringStereotypeElement &&  psiClass.equals(stereotypeElement.getPsiElement())) {
-            PsiTarget target = ((SpringStereotypeElement)stereotypeElement).getPsiTarget();
-            if (target instanceof AliasingPsiTarget) {
-              return Collections.singleton((AliasingPsiTarget)target);
-            }
+      final SpringJavaClassInfo info = SpringJavaClassInfo.getSpringJavaClassInfo(psiClass);
+      final List<JamSpringBeanPointer> stereotypeMappedBeans = info.resolve().getStereotypeMappedBeans();
+      for (JamSpringBeanPointer pointer : stereotypeMappedBeans) {
+        JamPsiMemberSpringBean<?> stereotypeElement = pointer.getSpringBean();
+        if (stereotypeElement instanceof SpringStereotypeElement && psiClass.equals(stereotypeElement.getPsiElement())) {
+          PsiTarget target = ((SpringStereotypeElement)stereotypeElement).getPsiTarget();
+          if (target instanceof AliasingPsiTarget) {
+            return Collections.singleton((AliasingPsiTarget)target);
           }
         }
-        return Collections.emptySet();
-      });
+      }
+      return Collections.emptySet();
     });
   }
 }

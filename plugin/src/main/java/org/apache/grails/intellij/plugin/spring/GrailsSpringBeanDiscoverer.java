@@ -187,8 +187,17 @@ public final class GrailsSpringBeanDiscoverer extends CustomModuleComponentsDisc
     return result;
   }
 
+  private static @Nullable GrailsApplication findApplication(@NotNull Module module) {
+    final GrailsApplicationManager manager = GrailsApplicationManager.getInstance(module.getProject());
+    for (VirtualFile root : ModuleRootManager.getInstance(module).getContentRoots()) {
+      final GrailsApplication application = manager.findApplication(root);
+      if (application != null) return application;
+    }
+    return null;
+  }
+
   private static @NotNull List<String> getPluginsNamesFromDescriptors(Module module) {
-    final GrailsApplication application = GrailsApplicationManager.getInstance(module.getProject()).findApplication(module.getModuleFile());
+    final GrailsApplication application = findApplication(module);
     if (application == null) return Collections.emptyList();
     return ContainerUtil.map(GrailsPlugins.computePlugins(application), p -> p.getPluginName());
   }

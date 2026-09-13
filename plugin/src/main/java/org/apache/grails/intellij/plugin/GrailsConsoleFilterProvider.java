@@ -51,7 +51,7 @@ public final class GrailsConsoleFilterProvider extends DefaultConsoleFiltersProv
 
   @Override
   public Filter @NotNull [] getDefaultFilters(@NotNull Project project, @NotNull GlobalSearchScope scope) {
-    return ReadAction.compute(() -> {
+    return ReadAction.computeBlocking(() -> {
       if (!GrailsApplicationManager.getInstance(project).hasApplications()) {
         return Filter.EMPTY_ARRAY;
       }

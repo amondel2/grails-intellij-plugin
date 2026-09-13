@@ -25,7 +25,9 @@ import org.jetbrains.plugins.groovy.extensions.impl.NamedArgumentDescriptorBase;
 import org.jetbrains.plugins.groovy.lang.psi.GroovyPsiElement;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.GrField;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.arguments.GrArgumentLabel;
+import org.jetbrains.plugins.groovy.lang.psi.impl.statements.expressions.ConversionResult;
 import org.jetbrains.plugins.groovy.lang.psi.impl.statements.expressions.TypesUtil;
+import org.jetbrains.plugins.groovy.lang.psi.typeEnhancers.GrTypeConverter;
 
 public final class GsonModelFieldArgumentDescriptor extends NamedArgumentDescriptorBase {
 
@@ -46,7 +48,7 @@ public final class GsonModelFieldArgumentDescriptor extends NamedArgumentDescrip
 
   @Override
   public boolean checkType(@NotNull PsiType type, @NotNull GroovyPsiElement context) {
-    return TypesUtil.isAssignable(myField.getType(), type, context);
+    return TypesUtil.canAssign(myField.getType(), type, context, GrTypeConverter.Position.ASSIGNMENT) == ConversionResult.OK;
   }
 
   @Override

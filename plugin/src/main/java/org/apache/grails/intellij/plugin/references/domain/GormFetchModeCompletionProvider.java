@@ -27,6 +27,7 @@ import com.intellij.codeInsight.completion.CompletionType;
 import com.intellij.codeInsight.completion.PrioritizedLookupElement;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupElementBuilder;
+import com.intellij.icons.AllIcons;
 import com.intellij.openapi.util.Pair;
 import com.intellij.patterns.ElementPattern;
 import com.intellij.patterns.PlatformPatterns;
@@ -35,8 +36,6 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiModifier;
 import com.intellij.psi.PsiType;
 import com.intellij.psi.util.PsiTreeUtil;
-import com.intellij.ui.IconManager;
-import com.intellij.ui.PlatformIcons;
 import com.intellij.util.ProcessingContext;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.plugins.groovy.lang.completion.handlers.NamedArgumentInsertHandler;
@@ -89,7 +88,7 @@ public final class GormFetchModeCompletionProvider extends CompletionProvider<Co
     for (Map.Entry<String, Pair<PsiType, PsiElement>> entry : descriptor.getPersistentProperties().entrySet()) {
       if (descriptor.isToManyRelation(entry.getKey())) {
         LookupElement lookup = LookupElementBuilder.create(entry.getKey())
-          .withIcon(IconManager.getInstance().getPlatformIcon(PlatformIcons.Property))
+          .withIcon(AllIcons.Nodes.Property)
           .withInsertHandler(NamedArgumentInsertHandler.INSTANCE);
 
         result.addElement(PrioritizedLookupElement.withPriority(lookup, 1));

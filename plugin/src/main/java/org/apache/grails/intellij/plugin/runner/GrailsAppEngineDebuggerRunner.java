@@ -42,7 +42,7 @@ public final class GrailsAppEngineDebuggerRunner extends GenericDebuggerRunner {
     if (!executorId.equals(DefaultDebugExecutor.EXECUTOR_ID)) return false;
     GrailsApplication application = runConfiguration.getGrailsApplicationNullable();
     if (!(application instanceof Grails2Application)) return false;
-    return ReadAction.compute(() -> {
+    return ReadAction.computeBlocking(() -> {
       GrailsStructure structure = GrailsStructure.getInstance(((Grails2Application)application).getModule());
       return structure != null && structure.isPluginInstalled("app-engine");
     });

@@ -31,6 +31,7 @@ import com.intellij.formatting.Wrap;
 import com.intellij.lang.ASTNode;
 import com.intellij.lang.Language;
 import com.intellij.lang.LanguageFormatting;
+import com.intellij.lang.injection.InjectedLanguageManager;
 import com.intellij.lang.javascript.JSTokenTypes;
 import com.intellij.lang.javascript.JavaScriptSupportLoader;
 import com.intellij.lang.javascript.JavascriptLanguage;
@@ -46,7 +47,7 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.codeStyle.CodeStyleSettings;
 import com.intellij.psi.css.CssStylesheet;
 import com.intellij.psi.formatter.xml.XmlFormattingPolicy;
-import com.intellij.psi.impl.source.tree.injected.InjectedLanguageUtil;
+import com.intellij.psi.util.PsiUtilCore;
 import com.intellij.psi.xml.XmlTag;
 import org.jetbrains.annotations.NotNull;
 import org.apache.grails.intellij.plugin.addins.GrailsIntegrationUtil;
@@ -183,7 +184,8 @@ public final class GspBlockGenerator {
   private static void generateBlockForJSInjection(PsiElement outer, List<Block> result, CodeStyleSettings settings) {
     PsiFile file = outer.getContainingFile();
     final int offset = outer.getTextRange().getStartOffset();
-    PsiElement element = InjectedLanguageUtil.findElementAtNoCommit(file, offset);
+    PsiElement element = InjectedLanguageManager.getInstance(file.getProject()).findInjectedElementAt(file, offset);
+    if (element == null) element = file.findElementAt(offset);
     FormattingModelBuilder builder = getJSFormattingModelBuilder(offset, file, outer);
     final FormattingModel childModel = builder.createModel(FormattingContext.create(element, settings));
     Block rootJsBlock = childModel.getRootBlock();
@@ -330,7 +332,8 @@ public final class GspBlockGenerator {
     public @NotNull List<Block> getSubBlocks() {
       if (mySubBlocks == null) {
         SubBlockVisitor visitor = new MyJSSubBlockVisitor(mySettings, myOffset);
-        PsiFile jsFile = InjectedLanguageUtil.findInjectedPsiNoCommit(myFile, myOffset);
+        PsiElement injected = InjectedLanguageManager.getInstance(myFile.getProject()).findInjectedElementAt(myFile, myOffset);
+        PsiFile jsFile = injected == null ? null : PsiUtilCore.getTemplateLanguageFile(injected.getContainingFile());
         if (jsFile != null && jsFile.getNode() != null) {
           visitor.visit(jsFile.getNode());
         }

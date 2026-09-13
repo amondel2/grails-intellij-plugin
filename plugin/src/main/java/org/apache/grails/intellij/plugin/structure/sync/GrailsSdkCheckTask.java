@@ -19,9 +19,8 @@
 
 package org.apache.grails.intellij.plugin.structure.sync;
 
-import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationAction;
 import com.intellij.notification.NotificationGroupManager;
-import com.intellij.notification.NotificationListener;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
@@ -31,7 +30,6 @@ import org.apache.grails.intellij.plugin.runner.GrailsCommandExecutor;
 import org.apache.grails.intellij.plugin.structure.GrailsApplication;
 import org.apache.grails.intellij.plugin.ui.GrailsConfigureSDKDialog;
 
-import javax.swing.event.HyperlinkEvent;
 
 public class GrailsSdkCheckTask extends GrailsApplicationBackgroundTask {
 
@@ -48,13 +46,9 @@ public class GrailsSdkCheckTask extends GrailsApplicationBackgroundTask {
     NotificationGroupManager.getInstance().getNotificationGroup("Grails Configure").createNotification(
       GrailsBundle.message("grails.sdk.not.found.title"), content,
       NotificationType.INFORMATION)
-      .setListener(
-        new NotificationListener.Adapter() {
-          @Override
-          protected void hyperlinkActivated(@NotNull Notification notification, @NotNull HyperlinkEvent e) {
-            new GrailsConfigureSDKDialog(application.getProject()).setGrailsApplication(application).show();
-          }
-        })
+      .addAction(NotificationAction.createSimpleExpiring(
+        GrailsBundle.message("action.Grails.ChangeSDK.text"),
+        () -> new GrailsConfigureSDKDialog(application.getProject()).setGrailsApplication(application).show()))
       .setImportant(true)
       .notify(application.getProject());
   }

@@ -41,7 +41,7 @@ public final class JavaScriptIntegrationUtil {
   private static final AtomicLong ourInjectionTagEpModCount = new AtomicLong();
 
   static {
-    GspJsInjectionTagBean.EP_NAME.addChangeListener(ourInjectionTagEpModCount::incrementAndGet, null);
+    GspJsInjectionTagBean.EP_NAME.getPoint().addChangeListener(ourInjectionTagEpModCount::incrementAndGet, null);
   }
 
   private JavaScriptIntegrationUtil() {

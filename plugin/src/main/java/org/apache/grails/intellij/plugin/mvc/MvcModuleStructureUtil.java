@@ -30,6 +30,7 @@ import com.intellij.openapi.module.JavaModuleType;
 import com.intellij.openapi.module.ModifiableModuleModel;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ContentEntry;
 import com.intellij.openapi.roots.DependencyScope;
@@ -260,7 +261,7 @@ public final class MvcModuleStructureUtil {
     if (!actions.second.isEmpty()) {
       final Application application = ApplicationManager.getApplication();
       final ModifiableFacetModel model =
-        ReadAction.compute(() -> FacetManager.getInstance(module).createModifiableModel());
+        ReadAction.computeBlocking(() -> FacetManager.getInstance(module).createModifiableModel());
       for (Consumer<ModifiableFacetModel> action : actions.second) {
         action.consume(model);
       }
@@ -529,7 +530,7 @@ public final class MvcModuleStructureUtil {
   public static @NotNull Module createAuxiliaryModule(@NotNull Module appModule, final String moduleName, final GrailsFramework framework) {
     ModuleManager moduleManager = ModuleManager.getInstance(appModule.getProject());
     final ModifiableModuleModel moduleModel = moduleManager.getModifiableModel();
-    final String moduleFilePath = new File(appModule.getModuleFilePath()).getParent() + "/" + moduleName + ".iml";
+    final String moduleFilePath = ModuleUtilCore.getModuleDirPath(appModule) + "/" + moduleName + ".iml";
     final VirtualFile existing = LocalFileSystem.getInstance().findFileByPath(moduleFilePath);
     if (existing != null) {
       try {

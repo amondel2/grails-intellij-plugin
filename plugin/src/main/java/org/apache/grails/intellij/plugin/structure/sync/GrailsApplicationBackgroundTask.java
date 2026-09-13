@@ -72,7 +72,7 @@ public abstract class GrailsApplicationBackgroundTask extends Task.Backgroundabl
 
     @Override
     public @NotNull Collection<GrailsApplication> get() {
-      return ReadAction.compute(() -> GrailsApplicationManager.getInstance(myProject).getApplications());
+      return ReadAction.computeBlocking(() -> GrailsApplicationManager.getInstance(myProject).getApplications());
     }
   }
 }

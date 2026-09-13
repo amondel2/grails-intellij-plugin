@@ -62,7 +62,7 @@ public final class GspPsiElementFactoryImpl extends GspPsiElementFactory {
   }
 
   private GspFile createDummyFile(String s) {
-    return (GspFile) PsiFileFactory.getInstance(myProject).createFileFromText("DUMMY__." + GspFileType.GSP_FILE_TYPE.getDefaultExtension(), s);
+    return (GspFile) PsiFileFactory.getInstance(myProject).createFileFromText("DUMMY__." + GspFileType.GSP_FILE_TYPE.getDefaultExtension(), GspFileType.GSP_FILE_TYPE, s);
   }
 
   @Override

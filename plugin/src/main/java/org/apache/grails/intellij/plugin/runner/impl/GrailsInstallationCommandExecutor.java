@@ -19,7 +19,6 @@
 
 package org.apache.grails.intellij.plugin.runner.impl;
 
-import com.intellij.execution.ExecutionBundle;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.configurations.JavaParameters;
 import com.intellij.execution.configurations.ParametersList;
@@ -37,9 +36,10 @@ import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.util.JdomKt;
+import com.intellij.util.EnvironmentUtil;
 import com.intellij.util.PathUtil;
 import com.intellij.util.PathsList;
+import org.apache.grails.intellij.plugin.runner.LocatableRunConfigurationWithCommonParameters;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -64,6 +64,8 @@ import org.apache.grails.intellij.plugin.util.version.Version;
 import org.apache.grails.intellij.plugin.mvc.MvcCommand;
 import org.jetbrains.plugins.groovy.util.GroovyUtils;
 
+import java.util.HashMap;
+import java.util.Map;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import java.io.File;
@@ -192,7 +194,7 @@ public final class GrailsInstallationCommandExecutor
 
   @Override
   public void writeAdditionalConfiguration(@NotNull Boolean depsClassPath, @NotNull Element element) {
-    JdomKt.addOptionTag(element, DEPS_CLASSPATH, Boolean.toString(depsClassPath), "setting");
+    LocatableRunConfigurationWithCommonParameters.writeSetting(element, DEPS_CLASSPATH, Boolean.toString(depsClassPath));
   }
 
   public JavaParameters createJavaParameters(@NotNull OldGrailsApplication grailsApplication,
@@ -202,7 +204,7 @@ public final class GrailsInstallationCommandExecutor
     if (grailsSdk == null) throw new ExecutionException(GrailsBundle.message("dialog.message.grails.sdk.not.defined"));
     Module module = grailsApplication.getModule();
     final Sdk sdk = ModuleRootManager.getInstance(module).getSdk();
-    if (sdk == null) throw new ExecutionException(ExecutionBundle.message("no.jdk.for.module.error.message", module.getName()));
+    if (sdk == null) throw new ExecutionException(GrailsBundle.message("dialog.message.no.jdk.for.module", module.getName()));
 
     final JavaParameters params = createJavaParameters(sdk, grailsSdk, command);
     final VirtualFile rootFile = grailsApplication.getRoot();
@@ -226,7 +228,10 @@ public final class GrailsInstallationCommandExecutor
     final String grailsSdkHomePath = grailsSdk.getPath();
 
     params.setJdk(sdk);
-    params.setupEnvs(command.getEnvVariables(), command.isPassParentEnvs());
+    Map<String, String> envs = new HashMap<>(command.getEnvVariables());
+    EnvironmentUtil.inlineParentOccurrences(envs);
+    params.setEnv(envs);
+    params.setPassParentEnvs(command.isPassParentEnvs());
     params.addEnv(GrailsConstants.GRAILS_HOME, FileUtil.toSystemDependentName(grailsSdkHomePath));
     GrailsFramework.addJavaHome(sdk, params);
 

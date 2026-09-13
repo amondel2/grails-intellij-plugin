@@ -1,12 +1,13 @@
 # Improvement Plan — grails-intellij-plugin
 
-Companion to `MIGRATION-PLAN.md`. That plan makes the repo ASF-compliant; this plan
-identifies functional gaps and sequences how to close them. Every phase below was
+This plan tracks functional improvements and remaining ASF follow-up work. Build
+conventions are in [AGENTS.md](AGENTS.md); release procedures are in [RELEASE.md](RELEASE.md).
+The functional phases below were
 detailed by examining the **grails-core monorepo** (surveyed 2026-07-07, `main` =
 `8.0.0-SNAPSHOT`); concrete class names, coordinates, and DSLs cited come from that
 source tree.
 
-**Two-plugin strategy** (per MIGRATION-PLAN amendment 2026-07-07): a *legacy* plugin
+**Two-plugin strategy** (deferred until after the first compliant release): a *legacy* plugin
 (id `org.intellij.grails`, forked at the compliance tag, Grails 2.x–6.x, maintenance
 only) and a *new* plugin (fresh Apache id, Grails 7+ only). Unless marked otherwise,
 the phases below target the **new** plugin; the legacy plugin receives only Phase 1
@@ -46,6 +47,13 @@ the phases below target the **new** plugin; the legacy plugin receives only Phas
 > Java equivalent. The 16 under `libs/testFramework/` are vendored copies of platform
 > test-framework sources, so rewriting them would make future re-syncs painful. Both sets
 > are deliberate; only those two projects still apply the Kotlin convention plugin.
+
+---
+
+## Optional ASF Follow-Up (Both Plugin Lines)
+
+- [ ] Generate a CycloneDX SBOM with a `LICENSE_MAPPING` for transitive dependencies
+      (grails-core parity). This is not a blocker for the first compliant release.
 
 ---
 
@@ -308,8 +316,8 @@ Controller, Domain, Service, TagLib, UrlMappings (fixed name, lives in
 ### 2.7 Test fixtures
 
 - [ ] Replace mock Grails 1.x JARs in `testdata/` with fixtures from a pinned
-      Grails 7/8 release (align with MIGRATION-PLAN Phase 3's source-release
-      decision; prefer test-time fetch of real `org.apache.grails` artifacts).
+      Grails 7/8 release, continuing to fetch real `org.apache.grails` artifacts at test
+      time rather than including compiled JARs in the source release.
 - [ ] Add whole-project test fixtures for the 7.x layout (web app + plugin project +
       data-service usage) so modern support has regression coverage — today's suite
       guards the legacy era.
@@ -321,9 +329,14 @@ Controller, Domain, Service, TagLib, UrlMappings (fixed name, lives in
 Per the two-plugin strategy, this is no longer a "should we remove?" debate — it's
 the construction step of the new plugin, immediately after the compliance fork:
 
-- [ ] New plugin id (proposal: `org.apache.grails.intellij`) + fresh Marketplace
-      listing under the Apache vendor; declare mutual exclusivity with
-      `org.intellij.grails` (both directions).
+- [ ] Fork the legacy codebase at the compliance release tag, inheriting the existing
+      build and release infrastructure. This repository becomes the Grails 7+ line.
+- [ ] Keep `org.intellij.grails` permanently with the legacy Marketplace listing so
+      existing users continue receiving compatible updates. Give the new plugin a fresh
+      Apache id (proposal: `org.apache.grails.intellij`) and Marketplace listing.
+- [ ] Declare and test mutual incompatibility between the two plugins, since both
+      register the same GSP language, file type, run configuration type, and stub indices.
+      Document that users must install only one of them.
 - [x] ~~Package rename `org.jetbrains.plugins.grails.*` / `org.jetbrains.plugins.groovy.mvc.*`
       → `org.apache.grails.intellij.*`.~~ **Done**, ahead of the fork: every project now has
       a unique base package equal to its Gradle group plus artifact name. The two feared
@@ -347,7 +360,8 @@ the construction step of the new plugin, immediately after the compliance fork:
       new plugin's guarded behavior.
 - [ ] Legacy repo: no code changes beyond the Phase 1 maintenance policy; add a
       README banner and Marketplace description pointing Grails 7+ users to the new
-      plugin.
+      plugin. Document maintenance-only support (platform compatibility and critical
+      fixes), with new feature work confined to the Grails 7+ plugin.
 
 ---
 
@@ -404,7 +418,7 @@ File as issues, prioritize by community feedback. Grounded candidates:
       repos (legacy bugs vs. new-plugin features).
 - [ ] `DEVELOPMENT.md` per repo: `runIde` sandbox, test layout, GSP lexer
       regeneration (`gen/` provenance), platform-bump procedure (legacy), release
-      procedure pointer to MIGRATION-PLAN Phase 6.
+      procedure pointer to [RELEASE.md](RELEASE.md).
 - [ ] Marketplace listings: legacy = renamed "Grails (legacy, Grails 2–6)" with
       pointer; new = Apache branding, fresh screenshots against a Grails 7 app.
 - [ ] ≥2 committers named as maintainers per plugin line; legacy sunset criteria
@@ -415,9 +429,7 @@ File as issues, prioritize by community feedback. Grounded candidates:
 ## Sequencing & dependencies
 
 ```
-MIGRATION-PLAN Phases 1–4 (compliance, this repo)
-        │
-        ├── Phase 0 audit (read-only, runs in parallel) ──► GAPS.md
+Phase 0 audit (shared codebase) ──► GAPS.md
         │
 first compliant release (feature-frozen re-release of the JetBrains plugin)
         │
