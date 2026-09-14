@@ -28,10 +28,9 @@ import org.apache.grails.intellij.lib.testFramework.UltimateOnlyTest;
 import org.junit.experimental.categories.Category;
 
 /**
- * Spring bean DSL resolution rides on the Ultimate-only Spring integration, so this class is
- * excluded from the Community Edition test run.
+ * Bean DSL resolution in {@code resources.groovy} (and in {@code doWithSpring} closures of Grails
+ * plugin classes). The DSL support is independent of the Spring Support plugin.
  */
-@Category(UltimateOnlyTest.class)
 public class GrailsSpringDSLTest extends Grails14TestCase {
   public void testResolveResourcesGroovy() {
     addSimpleGroovyFile("class Foo1 { String name; def xxx }");
@@ -73,7 +72,12 @@ public class GrailsSpringDSLTest extends Grails14TestCase {
     GrailsTestCase.checkResolve(pluginFile, "unresolvedRef", "unresolvedRef2");
   }
 
-  // todo failing, missing deps?!
+  /**
+   * Bean-name "usage highlighting" is provided by the Spring Support plugin's own reference search
+   * over {@code resources.groovy} (present in the Ultimate test sandbox), not by the kept DSL
+   * contributor, so this stays Ultimate-only.
+   */
+  @Category(UltimateOnlyTest.class)
   public void testHighlightUsages() {
     addSimpleGroovyFile("class Foo1 { String name }");
 

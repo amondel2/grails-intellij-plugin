@@ -39,8 +39,6 @@ import org.apache.grails.intellij.plugin.references.domain.criteria.CriteriaProp
 import org.apache.grails.intellij.plugin.references.domain.detachedCriteria.DetachedCriteriaReferenceProvider;
 import org.apache.grails.intellij.plugin.references.tagSupport.GspTagSupportGspReferenceProvider;
 import org.apache.grails.intellij.plugin.references.tagSupport.TagAttributeReferenceProvider;
-import org.apache.grails.intellij.plugin.spring.GrailsSpringMethodReferenceProvider;
-import org.apache.grails.intellij.plugin.util.UltimatePluginGuard;
 import org.jetbrains.plugins.groovy.lang.psi.api.GroovyResolveResult;
 import org.jetbrains.plugins.groovy.lang.psi.api.auxiliary.GrListOrMap;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.arguments.GrArgumentList;
@@ -84,8 +82,6 @@ public final class GrailsMethodNamedArgumentReferenceProvider extends PsiReferen
     new GormNamedArgumentReferenceProvider().register(res);
     new DetachedCriteriaReferenceProvider().register(res);
     new CriteriaPropertyReferenceProvider().register(res);
-    UltimatePluginGuard.runIfPluginAvailable(UltimatePluginGuard.SPRING_PLUGIN,
-                                             () -> new GrailsSpringMethodReferenceProvider().register(res));
     new GrailsPluginWebHelpReferenceProvider().register(res);
 
     Condition<PsiMethod> condition = new Contributor.LightMethodCondition(TagLibNamespaceDescriptor.GSP_TAG_METHOD_MARKER);

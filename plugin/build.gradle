@@ -39,7 +39,6 @@ dependencies {
         bundledPlugin 'com.intellij.javaee.web'
         bundledPlugin 'org.intellij.groovy'
         bundledPlugin 'com.intellij.database'
-        bundledPlugin 'com.intellij.spring'
         bundledPlugin 'com.intellij.gradle' // split out of org.jetbrains.plugins.gradle in 2026.2
         bundledPlugin 'org.jetbrains.plugins.gradle'
         bundledPlugin 'com.intellij.modules.ultimate'

@@ -35,7 +35,7 @@
 
   <!--
     Hard dependencies are restricted to the Community Edition platform. Ultimate-only
-    integrations (Spring Support, Java EE, Maven, Hibernate) are declared as optional
+    integrations (Java EE, Maven, Hibernate) are declared as optional
     <depends config-file="..."> entries below and load through the *-integration.xml files.
   -->
   <dependencies>
@@ -65,10 +65,7 @@
 
   <depends optional="true" config-file="grails-js-integration.xml">JavaScript</depends>
   <depends optional="true" config-file="grails-css-integration.xml">com.intellij.css</depends>
-  <depends optional="true" config-file="grails-spring-integration.xml">com.intellij.spring</depends>
   <depends optional="true" config-file="grails-javaee-integration.xml">com.intellij.javaee</depends>
-  <depends optional="true" config-file="grails-maven-integration.xml">org.jetbrains.idea.maven</depends>
-  <depends optional="true" config-file="grails-hibernate-integration.xml">com.intellij.hibernate</depends>
 
   <resource-bundle>messages.GrailsBundle</resource-bundle>
 
@@ -121,6 +118,7 @@
     <membersContributor implementation="org.apache.grails.intellij.plugin.references.domain.criteria.CriteriaClosureMemberContributor"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.references.domain.namedQuery.NamedCriteriaProxyMembersContributor"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.pluginSupport.resources.GrailsResourcesClosureMethodContributor"/>
+    <membersContributor implementation="org.apache.grails.intellij.plugin.spring.GrailsResourcesGroovyMemberContributor"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.references.domain.detachedCriteria.DetachedCriteriaClosureMemberProvider"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.references.domain.detachedCriteria.DetachedCriteriaMemberProvider"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.references.controller.HttpRequestMemberContributor"/>
@@ -363,8 +361,6 @@
       <className>org.apache.grails.intellij.plugin.actions.GrailsCreateActionByUsageIntention</className>
       <categoryKey>library.name</categoryKey>
     </intentionAction>
-
-    <!-- Spring Support (declared in grails-spring-integration.xml) -->
 
     <debugger.positionManagerFactory implementation="org.apache.grails.intellij.plugin.lang.gsp.debug.GspPositionManagerFactory"/>
     <debugger.javaDebugAware implementation="org.apache.grails.intellij.plugin.lang.gsp.debug.GspJavaDebugAware"/>

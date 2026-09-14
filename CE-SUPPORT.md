@@ -36,9 +36,17 @@ All of the core GSP language features work on CE without requiring IntelliJ Ulti
 - **Views** — view resolution, template navigation
 - **Services** — service class recognition
 - **Project structure** — Grails project detection, folder structure (grails-app/views,
-  grails-app/controllers, grails-app/domain, grails-app/services)
+  grails-app/controllers, grails-app/domain, grails-app/services), with dedicated
+  top-level nodes for `grails-app/i18n` (**Translations**) and the `grails-app/assets`
+  subfolders (**Stylesheets**, **Images**, **JavaScripts**)
 - **Run configurations** — Grails run configurations for application startup
 - **Groovy injections** — Groovy URL/expr attribute completion and highlighting
+- **Spring bean DSL** — `beans {}` definition resolution in
+  `grails-app/conf/spring/resources.groovy` and in `doWithSpring` closures of Grails plugin
+  classes (bean names, `ref()`, bean properties). The DSL contributor
+  (`GrailsResourcesGroovyMemberContributor`) is independent of the Spring plugin and loads
+  unconditionally since 262.1.0; bean-name "usage highlighting" there still needs the Spring
+  plugin and stays Ultimate-only.
 - **HTML tools** — HTML attribute completion and analysis (basic, not JSP-level)
 - **Code navigation** — go-to-definition for Grails tags, domain methods, controllers
 
@@ -55,7 +63,7 @@ The following features depend on Ultimate-only plugins and are gracefully degrad
 | JSP tag validation (`fmt:formatNumber` etc.) | JSP plugin (Ultimate) | Excluded |
 | HTML event attribute completion (`onclick`, `ondblclick`, etc.) | Web/JSP descriptor (Ultimate) | Excluded — CE gets base attributes only |
 | HQL injection in GORM methods (`findAll`, `executeQuery`) | Hibernate plugin (Ultimate) | Excluded (HQL not injected) |
-| Spring annotation resolution in Groovy (`@ContextConfiguration`) | Spring plugin (Ultimate) | Excluded |
+| Spring Support plugin integration (bean-name references in GSP, injected-bean typing/completion, Spring facet, model discoverer, `@ContextConfiguration` annotation resolution) | Spring plugin (Ultimate) | Removed in 262.1.0 on **both** editions — the classes live in Spring's base `intellij.spring` module, which the installed plugin's classloader cannot see (NoClassDefFoundError even on Ultimate). The standalone `beans {}` DSL keeps working (see above). |
 | Domain Class scope view (graph visualization) | `com.intellij.openapi.graph` (Ultimate platform) | Guarded — view does not open on CE |
 | Gradle project importing (Gradle 4.x/5.x/6.x tests) | Gradle plugin test framework (Ultimate) | Excluded — base class not in plain JUnit4 sandbox |
 | Maven project importing | Maven plugin (Ultimate) | Excluded |
@@ -77,6 +85,21 @@ The following issues were discovered and fixed to make CE support safe:
   added for the `GspFileType` use case (static method calls whose class may be absent).
 - **`GrailsIntegrationUtil`** — new `isGraphSupportEnabled()` class-presence check for
   the perspectives/graph guard.
+- **Maven/Hibernate module extensions moved into module descriptors** — the 2026.2 module
+  classloader split made main-plugin config-files (`grails-maven-integration.xml`,
+  `grails-hibernate-integration.xml`) invisible to the module classloaders, so the Grails
+  project view never appeared. The Maven (5) and Hibernate (3) extension registrations were
+  relocated into their module descriptors (`org.apache.grails.intellij.module.maven.xml`,
+  `org.apache.grails.intellij.module.hibernate.xml`).
+- **`GrailsApplicationProvider` hardened** — `createGrailsApplication()` now tolerates a
+  failing provider (per-provider `try/catch`, logged warning) instead of aborting the whole
+  application/node tree, with a regression test
+  (`GrailsProjectStructureTest.testCreateGrailsApplicationSurvivesFailingProvider`).
+- **Spring plugin integration removed (both editions)** — dropped the optional
+  `com.intellij.spring` dependency, the `grails-spring-integration.xml` config file, and the
+  12 extension classes. Extends into Spring's base module fail with NoClassDefFoundError on
+  2026.2; the two self-contained DSL helpers were kept and re-registered in the main
+  `plugin.xml`. See the "What does not work" table for the feature list.
 - **IC verifier configuration** — JetBrains removed the standalone IC installer channel for
   2025.3+. Fixed with `useInstaller.set(false)` on IC targets. IC verification failure
   level set to `INVALID_PLUGIN` only (MISSING/COMPAT are expected from absent optional deps).
@@ -84,7 +107,7 @@ The following issues were discovered and fixed to make CE support safe:
 ## Running the CE test suite
 
 ```bash
-# Full CE test suite (~3.5 min, ~947 tests)
+# Full CE test suite (~3.5 min, ~988 tests)
 ./gradlew :plugin:testIdeCe -PplatformEdition=IC
 
 # Run a CE dev IDE (sandbox)
