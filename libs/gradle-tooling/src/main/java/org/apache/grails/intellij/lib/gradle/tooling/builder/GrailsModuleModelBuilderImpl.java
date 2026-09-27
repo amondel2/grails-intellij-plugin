@@ -19,7 +19,6 @@
 
 package org.apache.grails.intellij.lib.gradle.tooling.builder;
 
-import com.intellij.gradle.toolingExtension.util.GradleVersionUtil;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
@@ -53,36 +52,50 @@ public class GrailsModuleModelBuilderImpl implements ModelBuilderService {
     // dependency: the shell artifact is not always version-managed by the platform/BOM (e.g. Grails 7's
     // org.apache.grails:grails-shell-cli), so adding it without a version fails to resolve and the whole
     // model build throws, leaving the module untagged as a Grails module.
-    String version = (String) project.getProperties().get("grailsVersion");
-
-    Configuration configuration = getConfiguration(project);
-    DefaultExternalModuleDependency dependency = new DefaultExternalModuleDependency(
-      grailsVersionInfo.gradleDependencyGroup,
-      grailsVersionInfo.shellArtifactId,
-      (version == null || version.isEmpty()) ? null : version);
-    configuration.getDependencies().add(dependency);
-
+    // findProperty rather than getProperties(): the latter reads every project property, including
+    // deprecated ones, which emits Gradle 9 deprecation warnings.
+    Object grailsVersionProperty = project.findProperty("grailsVersion");
+    String version = grailsVersionProperty == null ? null : grailsVersionProperty.toString();
     if (version == null || version.isEmpty()) {
-      version = configuration.getResolvedConfiguration().getFirstLevelModuleDependencies()
-        .stream()
-        .filter(dep -> grailsVersionInfo.gradleDependencyGroup.equals(dep.getModuleGroup())
-                       && grailsVersionInfo.shellArtifactId.equals(dep.getModuleName()))
-        .findFirst()
-        .map(dep -> dep.getModuleVersion())
-        .orElse(null);
+      // grails-core shares the Grails version and, unlike the shell, is always a (BOM-managed) project dependency
+      version = findResolvedVersion(project, grailsVersionInfo.gradleDependencyGroup, "grails-core");
     }
+    if (version == null || version.isEmpty()) return null;
 
-    List<String> paths = configuration.resolve().stream().map(file -> file.getAbsolutePath()).collect(Collectors.toList());
-    return (version != null && !version.isEmpty()) ? new GrailsModuleImpl(version, context.grailsPluginCoordinates, paths) : null;
+    // A detached configuration is resolvable from the start. Copying 'implementation' instead is rejected
+    // by Gradle 9+ ("Calling configuration method 'copy(Spec)' is not allowed"), since that configuration
+    // is declarable only, which made the whole model build fail and left Gradle 9 projects (Grails 8)
+    // untagged as Grails modules. A detached configuration gets no dependency management, hence the
+    // explicit version.
+    Configuration configuration = project.getConfigurations().detachedConfiguration(new DefaultExternalModuleDependency(
+      grailsVersionInfo.gradleDependencyGroup, grailsVersionInfo.shellArtifactId, version));
+
+    return new GrailsModuleImpl(version, context.grailsPluginCoordinates, resolveShellUrls(project, configuration));
   }
 
-  private static Configuration getConfiguration(Project project) {
-    if (GradleVersionUtil.isCurrentGradleNewerThan("7.0")) {
-      Configuration configuration = project.getConfigurations().getByName("implementation").copy(dependency -> false);
-      configuration.setCanBeResolved(true);
-      return configuration;
-    } else {
-      return project.getConfigurations().getByName("compile").copy(dependency -> false);
+  private static @Nullable String findResolvedVersion(Project project, String group, String name) {
+    Configuration classpath = project.getConfigurations().findByName("compileClasspath");
+    if (classpath != null) return null; // TEMP
+    return classpath.getResolvedConfiguration().getLenientConfiguration().getAllModuleDependencies()
+      .stream()
+      .filter(dep -> group.equals(dep.getModuleGroup()) && name.equals(dep.getModuleName()))
+      .findFirst()
+      .map(dep -> dep.getModuleVersion())
+      .orElse(null);
+  }
+
+  /**
+   * The shell classpath only backs the Grails command executor, so failing to resolve it (e.g. its
+   * org.gradle:gradle-tooling-api dependency lives outside Maven Central) must not cost the module its
+   * Grails support.
+   */
+  private static @Nullable List<String> resolveShellUrls(Project project, Configuration configuration) {
+    try {
+      return configuration.resolve().stream().map(file -> file.getAbsolutePath()).collect(Collectors.toList());
+    }
+    catch (RuntimeException e) {
+      project.getLogger().warn("Unable to resolve the Grails shell, Grails commands will not be available in the IDE", e);
+      return null;
     }
   }
 

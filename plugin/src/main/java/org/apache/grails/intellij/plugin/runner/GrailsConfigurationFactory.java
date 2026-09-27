@@ -29,7 +29,6 @@ import com.intellij.openapi.util.Key;
 import org.jetbrains.annotations.NotNull;
 import org.apache.grails.intellij.plugin.config.GrailsConstants;
 import org.apache.grails.intellij.plugin.structure.GrailsApplicationManager;
-import org.apache.grails.intellij.plugin.util.version.Version;
 
 public final class GrailsConfigurationFactory extends ConfigurationFactory {
   GrailsConfigurationFactory(ConfigurationType configurationType) {
@@ -56,8 +55,6 @@ public final class GrailsConfigurationFactory extends ConfigurationFactory {
   @Override
   public boolean isApplicable(@NotNull Project project) {
     final GrailsApplicationManager applicationManager = GrailsApplicationManager.getInstance(project);
-    return !applicationManager.getApplications().stream()
-      .filter(application -> application.getGrailsVersion().isLessThan(Version.GRAILS_6_0))
-      .toList().isEmpty();
+    return applicationManager.getApplications().stream().anyMatch(GrailsRunConfigurationType::isRunnable);
   }
 }
