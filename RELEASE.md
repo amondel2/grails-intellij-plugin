@@ -412,11 +412,29 @@ the Marketplace:
    If the checked-in version needs more than a patch bump — feature work, or a move to a new
    IntelliJ Platform branch — edit `gradle.properties` in that PR before merging it. See
    [Versioning](#versioning).
-4. **MANUAL:** send the `[ANNOUNCE]` email, rendered from
+4. **MANUAL:** add the release to the
+   [Grails website download page](https://grails.apache.org/download.html), which is where
+   the ASF-required links to the source and binary distributions, their signatures, and
+   checksums live:
+   1. Run the grails-static-website
+      [Release Tool](https://github.com/apache/grails-static-website/actions/workflows/release-tool.yml)
+      workflow with `artifact_id` `grails-intellij-plugin` and `artifact_version` set to the
+      released version. Leave the other inputs empty; they are only needed the first time a
+      tool is added. This bumps the `tools:` entry in the website's `conf/releases.yml`.
+   2. Run the grails-static-website
+      [Publish](https://github.com/apache/grails-static-website/actions/workflows/publish.yml)
+      workflow. The Release Tool commit is pushed with the workflow's `GITHUB_TOKEN`, which
+      does not trigger other workflows, so without this the page only updates on the next
+      scheduled publish (every two hours).
+
+   The step prints both links. It runs before the announcement because the announcement
+   points readers at the download page.
+5. **MANUAL:** send the `[ANNOUNCE]` email, rendered from
    [`.github/vote_templates/announce.txt`](.github/vote_templates). It is the pipeline's last
    step so the announcement goes out only once the plugin is actually installable from the
-   Marketplace and the repository is back on a snapshot version. Announcements must come from
-   your `@apache.org` address (see <https://infra.apache.org/committer-email.html>).
+   Marketplace, listed on the download page, and the repository is back on a snapshot version.
+   Announcements must come from your `@apache.org` address (see
+   <https://infra.apache.org/committer-email.html>).
 
 ## Rollback
 
