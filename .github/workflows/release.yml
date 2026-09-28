@@ -394,7 +394,7 @@ jobs:
           echo "::group::Manual ASF Reporter Update"
           TODAY=$(date +"%Y-%m-%d")
           echo "Update https://reporter.apache.org/addrelease.html?${SVN_PROJECT} to add"
-          echo "${SVN_FOLDER}-${VERSION} as complete as of ${TODAY}"
+          echo "${SVN_FOLDER^^}-${VERSION} as complete as of ${TODAY}"
           echo "::endgroup::"
       - name: "🛠️ Install tools"
         run: sudo apt-get install -y gettext-base # gettext-base provides envsubst for the announcement email
