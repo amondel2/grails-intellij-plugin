@@ -23,7 +23,7 @@ limitations under the License.
 ## Quick Reference
 
 ```bash
-# Compile and run all tests (~3.5 min, ~970 tests)
+# Compile and run all tests (~4.5 min, ~1070 tests)
 ./gradlew test
 
 # Single test class / single test method
@@ -133,15 +133,16 @@ Special packaging: `plugin/standardDsls/` sits outside the resource roots and is
 
 ## Running & Debugging Tests
 
-- Full suite: `./gradlew test` — ~4 min, 987 tests across 186 classes.
+- Full suite: `./gradlew test` — ~4.5 min, 1067 tests across 207 classes.
 - Failure details live in `plugin/build/test-results/test/TEST-<fqcn>.xml`; the `<system-out>`
   CDATA holds logged output. The giant module-list line and
   `InstanceNotOverridable`/SLF4J warnings are noise — ignore them.
 - **Probe technique** that works well here: add `System.out.println("### TAG ...")`
   probes in `src/`, run one test, grep the result XML for `### TAG`. Remove probes
   before committing.
-- Some tests can use IDE sources via `test.idea.home.path` in `gradle.properties`
-  (points at a local intellij-community checkout; unset/nonexistent on CI is fine).
+- Some tests can use IDE sources via `-Ptest.idea.home.path=<path>`, passed on the command
+  line (points at a local intellij-community checkout). It is not set in the committed
+  `gradle.properties`, and is silently ignored when the path does not exist.
 - Base classes: extend `GrailsTestCase` (in `testFramework`) for light-fixture tests;
   it handles the project descriptor and JDK. See Critical Rule 5 before touching
   fixture/JDK setup.

@@ -194,13 +194,13 @@ def fixtureJarTasks = fixtureLibraries.collect { String directory, Map<String, S
 }
 
 // ---------------------------------------------------------------------------------------------
-// Community Edition targets (see tasks/prd-community-edition-support.md)
+// Community Edition targets
 //
 // The plugin ZIP is built once against Ultimate and stays a single artifact; Community Edition is
 // supported at runtime through optional <depends config-file> entries, runtime guards for the few
 // Ultimate classes that would otherwise be loaded from an unconditional code path, and these named
 // testing targets. Nobody downloads a Community distribution at configuration time -- the Azure
-// Pipelines nightly (tasks/CI.md SM6) invokes columns explicitly.
+// Pipelines nightly invokes these columns explicitly.
 // ---------------------------------------------------------------------------------------------
 intellijPlatformTesting {
     // Registered only behind -PplatformEdition=IC. The IC checks belong to the opt-in Community

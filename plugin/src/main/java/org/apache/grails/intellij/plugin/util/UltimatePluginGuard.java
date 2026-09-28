@@ -81,6 +81,10 @@ public final class UltimatePluginGuard {
    * Reads the value of the public static field {@code fieldName} on {@code className} by
    * reflection, caching the result, returning {@code fallback} when the class or field is not
    * available. Prevents loading Ultimate-only classes on an IDE that does not install them.
+   *
+   * <p>The catch is {@code Throwable} because loading a missing Ultimate class can fail with an
+   * {@link Error} too; the guard runs first so a cancelled read unwinds instead of being logged
+   * and answered with the fallback.
    */
   public static @Nullable <T> T staticFieldValue(@NotNull String className, @NotNull String fieldName, @Nullable T fallback) {
     String key = className + '#' + fieldName;
@@ -98,6 +102,7 @@ public final class UltimatePluginGuard {
       return typed;
     }
     catch (Throwable e) {
+      ControlFlowGuard.rethrowIfControlFlow(e);
       LOG.warn("Cannot read static field " + key + "; using fallback", e);
       return fallback;
     }
@@ -109,12 +114,16 @@ public final class UltimatePluginGuard {
    * for methods: a guard whose predicate is the class being loaded rather than a plugin id, which
    * is what makes it safe for classes whose owning plugin is registered even when the class jar
    * itself is absent (e.g. the full-platform module set leaking into a Community test sandbox).
+   *
+   * <p>Same reason for the {@code Throwable} catch and the guard-first rule as
+   * {@link #staticFieldValue}: an absent module is tolerated, a cancellation is not swallowed.
    */
   public static void invokeStaticIfAvailable(@NotNull String className, @NotNull String methodName) {
     try {
       Class.forName(className).getMethod(methodName).invoke(null);
     }
     catch (Throwable e) {
+      ControlFlowGuard.rethrowIfControlFlow(e);
       LOG.debug("Cannot invoke static method " + className + '#' + methodName, e);
     }
   }

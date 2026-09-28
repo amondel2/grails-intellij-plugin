@@ -23,6 +23,8 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.extensions.ExtensionPointName;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+import org.apache.grails.intellij.plugin.GrailsBundle;
+import org.apache.grails.intellij.plugin.util.ControlFlowGuard;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -47,7 +49,9 @@ public abstract class GrailsApplicationProvider {
    * A single broken provider must not disable Grails detection: providers are
    * contributed by optional content modules (Maven, Hibernate) that may fail to
    * load on a given IDE, so both the extension-list lookup and every provider
-   * invocation are guarded.
+   * invocation are guarded. The guards re-throw control-flow exceptions so a
+   * cancelled scan does not read as a failed one - the only caller runs inside a
+   * {@code ReadAction.nonBlocking} frame, which is where such a re-throw unwinds.
    *
    * @param root application root, that is the parent folder of some grails-app.
    * @return instance of Grails application or {@code null}.
@@ -58,7 +62,8 @@ public abstract class GrailsApplicationProvider {
       providers = APPLICATION_PROVIDER.getExtensions();
     }
     catch (RuntimeException e) {
-      LOG.error("Failed to load Grails application providers", e);
+      ControlFlowGuard.rethrowIfControlFlow(e);
+      LOG.error(GrailsBundle.message("error.grails.application.providers.failed.to.load"), e);
       return null;
     }
     for (GrailsApplicationProvider provider : providers) {
@@ -67,7 +72,9 @@ public abstract class GrailsApplicationProvider {
         if (application != null) return application;
       }
       catch (RuntimeException e) {
-        LOG.warn("Grails application provider " + provider.getClass().getName() + " failed for " + root.getPath(), e);
+        ControlFlowGuard.rethrowIfControlFlow(e);
+        LOG.warn(GrailsBundle.message("warning.grails.application.provider.failed.for",
+                                      provider.getClass().getName(), root.getPath()), e);
       }
     }
     return null;
