@@ -177,9 +177,17 @@ etc/bin/verify.sh v262.0.0 /tmp/grails-ij-verify
 That script chains the four steps below and prints the manual checks it cannot perform.
 Add `--skip-reproducible` to stop before the slow rebuild step.
 
+`verify.sh` starts with a preflight that fails fast when `java`, `gpg`, `gpg-agent`,
+`curl`, `unzip` or `gradle` is missing, rather than discovering it part-way through a long
+run. `gpg-agent` is checked separately from `gpg` because GnuPG 2.x shells out to the agent
+even to import a key into a throwaway keyring, and Debian's `gpg` package only *recommends*
+it — without it every signature check fails with `failed to start agent`.
+
 Because the rebuild comparison is sensitive to host-OS differences, prefer running it in
 the container described in
-[Appendix: Verification from a container](#appendix-verification-from-a-container).
+[Appendix: Verification from a container](#appendix-verification-from-a-container), where
+those tools are preinstalled and the scripts are on `PATH` (`cd grails-verify && verify.sh
+v262.0.0 .`).
 
 ### 6.1 Download the staged artifacts
 
@@ -198,16 +206,32 @@ etc/bin/verify-distributions.sh v262.0.0 /tmp/grails-ij-verify
 ```
 
 For both archives this verifies the `.sha512` checksum and the `.asc` detached signature
-(imported into a throwaway GPG home, so a key you already trust locally cannot mask a bad
-signature), then checks the contents:
+(against a throwaway GPG home holding only the Grails `KEYS` file, so a key you already
+trust locally cannot mask a bad signature, and a signature that verifies is by definition
+from a key the PMC published to the release dist area), then checks the contents:
 
 - **Source distribution** must contain `LICENSE`, `NOTICE`, `README.md`, `INSTALL`,
-  `RELEASE.md`, `.sdkmanrc`, and `gradle-bootstrap/`, and must **not** contain any `*.jar`,
-  `gradlew`, `.git/`, `.github/`, `.asf.yaml`, or the planning documents.
+  `RELEASE.md`, `.sdkmanrc`, and `gradle-bootstrap/` **at the root of the distribution**, and
+  must **not** contain any `*.jar`, `gradlew`, `.git/`, `.github/`, `.asf.yaml`, or the
+  planning documents.
 - **Binary distribution** must carry `LICENSE` and `NOTICE` at the root of the plugin
   directory — the ZIP is the unit being distributed, and ASF policy requires both files in
   every unit of distribution regardless of its format — as well as `META-INF/LICENSE`,
   `META-INF/NOTICE`, and `META-INF/plugin.xml` inside the composed plugin jar.
+- **`LICENSE` and `NOTICE` contents**, in both archives: `LICENSE` must be the Apache
+  License 2.0 (title, version line, and end of the terms), and `NOTICE` must name *Apache
+  Grails IntelliJ Plugin* and carry the ASF copyright line. A file that is present but
+  empty, truncated, or copied from another project passes a name check and fails a vote, so
+  the contents are checked and not just the filenames.
+- **Referenced license files**: if `LICENSE` or `NOTICE` ever points at a bundled
+  third-party license — grails-core writes these as
+  `See licenses/LICENSE-MIT.txt for the full license terms.` — the referenced file must be
+  packaged in the same archive. Neither file carries such a reference today; the check is
+  there so the first bundled dependency cannot ship with a dangling pointer.
+- **Agreement across archives**: the `LICENSE`/`NOTICE` in the source zip, at the root of
+  the binary zip, and in the plugin jar's `META-INF` must be byte-identical. All three are
+  packaged from the one pair at the repository root, so a difference means one archive was
+  built from a stale copy.
 
 The equivalent manual commands are:
 
@@ -226,7 +250,12 @@ being released:
 ./gradlew rat
 ```
 
-`verify.sh` extracts the source distribution, bootstraps its wrapper, and runs `rat` there.
+`verify.sh` extracts the source distribution and runs `rat` on it with the Gradle from
+`.sdkmanrc`, deliberately *before* bootstrapping the wrapper: `gradle bootstrap` writes a
+wrapper into `gradle-bootstrap/` and the project root, and auditing afterwards flags a
+generated `gradle-wrapper.properties` that the distribution never contained. The audit has
+to see the archive as staged. (Those generated paths are RAT-excluded as well, so a
+bootstrapped checkout still audits cleanly.)
 
 ### 6.4 Rebuild from source and compare to the staged binary
 
@@ -235,8 +264,31 @@ etc/bin/verify-reproducible.sh v262.0.0 /tmp/grails-ij-verify
 ```
 
 This is the check that proves the published binary was built from the voted-on source. It
-extracts the source distribution, bootstraps the Gradle Wrapper, rebuilds `buildPlugin`,
-and compares the result against the staged binary.
+bootstraps the Gradle Wrapper in the source distribution that
+[section 6.2](#62-verify-checksums-signatures-and-archive-contents) extracted, rebuilds
+`buildPlugin`, and compares the result against the staged binary.
+
+The layout mirrors grails-core: the work happens inside the extracted source distribution,
+and the evidence lands in *its* `etc/bin/results`, which is the same path the results
+occupy in a checkout — so it can be copied straight back:
+
+```
+<download-location>/grails-intellij-plugin/etc/bin/results/
+  first.txt        "<sha256>  <path>" for every file in the staged binary
+  second.txt       the same for the rebuilt binary
+  firstArtifact/   the staged plugin tree
+  secondArtifact/  the rebuilt plugin tree
+  diff.txt         the paths that differ (empty when reproducible)
+```
+
+`first`/`second` rather than `staged`/`rebuilt` keeps the names identical to
+[`test-reproducible-build.sh`](etc/bin/test-reproducible-build.sh) and to grails-core, where
+`first` is always the reference artifact and `second` the local rebuild.
+
+When a jar differs, the script opens it and reports which entries inside it differ — and for
+`META-INF/MANIFEST.MF`, which attributes. A jar whose classes are identical and whose
+manifest carries a different embedded build value is a completely different finding from one
+whose bytecode changed, and `Binary files ... differ` does not distinguish them.
 
 > **The two ZIP files will never have the same SHA.** The staged binary is signed for the
 > JetBrains Marketplace after the build, and a local rebuild is unsigned. What must match
@@ -248,8 +300,11 @@ and compares the result against the staged binary.
 - Install the binary distribution into IntelliJ IDEA Ultimate via
   **Settings > Plugins > Install Plugin from Disk**, open a Grails project, and confirm
   the plugin loads and GSP support works.
-- Confirm the signing key belongs to a Grails PMC member — see
-  [Appendix: GPG & the KEYS file](#appendix-gpg--the-keys-file).
+
+Nothing else is left to check by hand. In particular, the signing key does not need a
+separate provenance check: step 6.2 verifies each signature against a keyring containing
+nothing but the Grails `KEYS` file from the ASF release dist area, which only the PMC can
+write to — see [Appendix: GPG & the KEYS file](#appendix-gpg--the-keys-file).
 
 ## 7. Vote
 
@@ -439,6 +494,14 @@ environment — see
 - **`SOURCE_DATE_EPOCH`** — most tools honour it for embedded dates. Archive entries do
   not depend on it here (timestamps are pinned to a constant), but the test script sets it
   from the last git commit so anything that *does* read it agrees between the two builds.
+- **Embedded build-environment values** — the IntelliJ Platform Gradle Plugin's
+  `generateManifest` task writes the build host into every jar's `MANIFEST.MF`, and
+  `Build-OS` is the kernel release string plus architecture (`Linux 6.17.0-1022-azure amd64`
+  on the CI runner, `Mac OS X 15.6 aarch64` on a laptop). One attribute nobody can match is
+  enough to make every jar differ while all bytecode is identical, so the reproducible
+  convention plugin pins it. Any future plugin or task that stamps the environment into an
+  artifact needs the same treatment. `Build-JVM` is deliberately left alone — `.sdkmanrc`
+  pins the exact JDK, so a mismatch there is a real warning rather than noise.
 - **JDK version** — a different JDK can change bytecode. Always build with the JDK pinned
   in `.sdkmanrc`; the Docker image installs exactly that version. This is also why the
   build deliberately sets no Gradle toolchain: the pinned JDK is the contract.
@@ -474,17 +537,59 @@ they neither modify nor depend on your keyring.
 
 ## Appendix: Verification from a container
 
-The official artifacts are built on Linux in GitHub Actions. To reproduce that
-environment locally, use [`etc/bin/Dockerfile`](etc/bin/Dockerfile), which is pinned to
-the same Liberica JDK as `.sdkmanrc`. The image also installs the Gradle version from
-`.sdkmanrc` on `PATH` so the extracted source release can bootstrap its own wrapper:
+The official artifacts are built on Linux in GitHub Actions. To reproduce that environment
+locally, use [`etc/bin/Dockerfile`](etc/bin/Dockerfile). It mirrors
+[grails-core's container](https://github.com/apache/grails-core/blob/HEAD/etc/bin/Dockerfile)
+— same `groovy` user, same `/home/groovy` layout, same baked-in scripts on `PATH` — so the
+habit carries between the Grails repositories. It is pinned to the same Liberica JDK as
+`.sdkmanrc`, and also installs the Gradle version from `.sdkmanrc` so the extracted source
+release can bootstrap its own wrapper (grails-core bakes in its `gradlew` instead; here the
+wrapper is regenerated from `gradle-bootstrap`, which needs a real Gradle to run).
 
 ```bash
-docker build -t grails-ij:testing -f etc/bin/Dockerfile .
-docker run -it --rm -v "$(pwd):/home/builder/project" grails-ij:testing bash
+docker build -t grails-ij:testing -f etc/bin/Dockerfile . && \
+  docker run -it --rm -v $(pwd):/home/groovy/project grails-ij:testing bash
 # inside the container:
-etc/bin/verify.sh v262.0.0 /tmp/grails-ij-verify
+cd grails-verify
+verify.sh v262.0.0 .
 ```
+
+The verification scripts are **baked into the image** at `/home/groovy/scripts/etc/bin` and
+put on `PATH`, so they are callable by bare name from anywhere in the container and do not
+depend on the bind mount. `/home/groovy/grails-verify` is there as the working directory for
+downloads. Because the scripts are baked in, an edit to `etc/bin` only reaches the container
+on a rebuild — which is why the command above chains `build && run`. To exercise
+uncommitted script changes without rebuilding, run the mounted copies instead:
+
+```bash
+cd ~/project && etc/bin/verify.sh v262.0.0 /tmp/grails-ij-verify
+```
+
+The bind mount at `/home/groovy/project` is for the *project*: running
+`etc/bin/test-reproducible-build.sh` against the checkout, and copying results back to the
+host. Mount somewhere else and everything still works except those two things; the startup
+banner from [`etc/bin/container-profile.sh`](etc/bin/container-profile.sh) reports which
+case you are in, and restores the `PATH` entries that a login shell's `/etc/profile` drops.
+
+If artifacts differ and you want to inspect them on the host, copy the evidence out of the
+container into the mounted checkout, as grails-core does:
+
+```bash
+rsync -av ~/grails-verify/grails-intellij-plugin/etc/bin/results/ ~/project/etc/bin/results/
+```
+
+The default `CMD` is a keep-alive loop, again matching grails-core, so the container can be
+started detached and attached to repeatedly — useful when a verification run is long:
+
+```bash
+docker run -d --name grails-ij-verify -v $(pwd):/home/groovy/project grails-ij:testing
+docker exec -it grails-ij-verify bash
+```
+
+On an Apple Silicon host the image builds as `linux/arm64`. That is fine for the
+reproducibility comparison — the artifacts are JVM bytecode and archive entries, not native
+code — but add `--platform linux/amd64` to both the `build` and the `run` if you want the
+container to match the CI runner's architecture exactly.
 
 Anyone bumping the JDK in `.sdkmanrc` must bump the `FROM` line in the Dockerfile to
 match, or the container will no longer reproduce the released artifacts.
@@ -522,4 +627,5 @@ The tooling that supports this:
 | `etc/bin/test-reproducible-build.sh` | Builds twice on one machine and compares artifact hashes. |
 | `etc/bin/verify-reproducible.sh` | Rebuilds from the staged source distribution and compares to the staged binary. |
 | `etc/bin/Dockerfile` | Linux environment matching CI, for ruling out host-OS differences. |
+| `etc/bin/container-profile.sh` | Shell profile inside that container: keeps the JDK and baked-in scripts on `PATH`, and prints the verification commands. |
 | `.sdkmanrc` | The pinned JDK and Gradle versions; the single source of truth for both CI and the Dockerfile. |

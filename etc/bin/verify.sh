@@ -75,6 +75,39 @@ echo "# Verifying Apache Grails IntelliJ Plugin ${VERSION}"
 echo "# Artifacts: ${DOWNLOAD_LOCATION}"
 echo "############################################################"
 
+# Fail fast on anything the verification scripts depend on but do not install themselves,
+# so a misconfigured environment is reported up front instead of halfway through a long
+# run. gradle is required, not optional: the RAT audit and the reproducible rebuild both
+# bootstrap the source distribution's wrapper with it, and a run that silently skips them
+# is a green result that verified less than it claims to have.
+preflight() {
+  local missing=0 tool
+  # gpg-agent is listed separately from gpg: GnuPG 2.x shells out to it even for an
+  # --import into a throwaway homedir, and Debian's gpg package only recommends it.
+  for tool in java gpg gpg-agent curl unzip gradle; do
+    if ! command -v "${tool}" > /dev/null 2>&1; then
+      echo "❌ Required tool not found on \$PATH: ${tool}"
+      missing=1
+    fi
+  done
+  if [ "${missing}" -ne 0 ]; then
+    echo "❌ Preflight checks failed. Resolve the issues above before running verification."
+    echo "   java/gradle: install the versions pinned in .sdkmanrc (\`sdk env install\`)."
+    echo "   gpg/gpg-agent: from your package manager -- Debian installs the agent with the"
+    echo "   gnupg package, not the smaller gpg package; macOS has it in \`brew install gnupg\`."
+    echo "   In the container from etc/bin/Dockerfile everything above is preinstalled, so a"
+    echo "   failure there means PATH was rebuilt by a login shell -- see RELEASE.md."
+    exit 1
+  fi
+}
+
+echo ""
+echo "### Preflight"
+preflight
+echo "✅ java:   $(java -version 2>&1 | head -n 1)"
+echo "✅ gradle: $(gradle --version | sed -n 's/^Gradle //p' | head -n 1)"
+echo "✅ gpg:    $(gpg --version | head -n 1)"
+
 echo ""
 echo "### 1/4 Downloading staged artifacts"
 "${SCRIPT_DIR}/download-release-artifacts.sh" "${RELEASE_TAG}" "${DOWNLOAD_LOCATION}"
@@ -86,20 +119,22 @@ echo "### 2/4 Verifying checksums, signatures, and archive contents"
 echo ""
 echo "### 3/4 Running the Apache RAT license audit on the source distribution"
 # Audit the source distribution itself, not the local checkout: the release is the source
-# archive, so that is what has to pass the license audit.
-RAT_DIR="${DOWNLOAD_LOCATION}/rat"
-rm -rf "${RAT_DIR}"
-mkdir -p "${RAT_DIR}"
-unzip -q "${DOWNLOAD_LOCATION}/apache-grails-intellij-plugin-${VERSION}-src.zip" -d "${RAT_DIR}"
-RAT_SRC="$(find "${RAT_DIR}" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-if command -v gradle &> /dev/null; then
-  (cd "${RAT_SRC}/gradle-bootstrap" && gradle bootstrap)
-  (cd "${RAT_SRC}" && ./gradlew rat --no-daemon)
-  echo "✅ RAT audit passed"
-else
-  echo "⚠️  skipped: no 'gradle' on PATH to bootstrap the wrapper in the source distribution."
-  echo "   Install the version pinned in .sdkmanrc (e.g. 'sdk env install') to run this step."
+# archive, so that is what has to pass the license audit. The tree is the one
+# verify-distributions.sh extracted -- a single extraction shared by every later step, as
+# in grails-core, rather than a second private copy per script.
+RAT_SRC="${DOWNLOAD_LOCATION}/grails-intellij-plugin"
+if [ ! -d "${RAT_SRC}" ]; then
+  echo "❌ ${RAT_SRC} not found — verify-distributions.sh extracts it; run it first" >&2
+  exit 1
 fi
+# Audit the archive exactly as staged, with the Gradle on PATH, and do NOT bootstrap the
+# wrapper first: `gradle bootstrap` runs the `wrapper` task inside gradle-bootstrap/ and
+# copies the result to the root, so it leaves behind a gradle-wrapper.properties that was
+# never in the distribution. Auditing after that step reports a file the release does not
+# contain. The bootstrap path is not skipped overall -- verify-reproducible.sh bootstraps
+# this same tree and rebuilds from it in step 4.
+(cd "${RAT_SRC}" && gradle rat --no-daemon)
+echo "✅ RAT audit passed"
 
 echo ""
 if [ "${SKIP_REPRODUCIBLE}" -eq 1 ]; then
@@ -117,6 +152,4 @@ echo "# Still to check by hand before voting:"
 echo "#   * install ${DOWNLOAD_LOCATION}/apache-grails-intellij-plugin-${VERSION}-bin.zip"
 echo "#     into IntelliJ IDEA Ultimate via Settings > Plugins > Install Plugin from Disk,"
 echo "#     open a Grails project, and confirm the plugin loads and GSP support works"
-echo "#   * confirm the GPG key that signed the artifacts belongs to a Grails PMC member"
-echo "#     (see the KEYS appendix in RELEASE.md)"
 echo "############################################################"
