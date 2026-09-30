@@ -19,7 +19,6 @@
 
 package org.apache.grails.intellij.plugin.references.controller;
 
-import com.intellij.javaee.web.WebCommonClassNames;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiClass;
@@ -42,9 +41,11 @@ import org.jetbrains.plugins.groovy.lang.resolve.NonCodeMembersContributor;
 import org.jetbrains.plugins.groovy.lang.resolve.ResolveUtil;
 
 final class HttpRequestMemberContributor extends NonCodeMembersContributor {
+  private static final String HTTP_SERVLET_REQUEST = "javax.servlet.http.HttpServletRequest";
+
   @Override
   protected @Nullable String getParentClassName() {
-    return WebCommonClassNames.JAVAX_HTTP_SERVLET_REQUEST;
+    return HTTP_SERVLET_REQUEST;
   }
 
   @Override
@@ -104,7 +105,7 @@ final class HttpRequestMemberContributor extends NonCodeMembersContributor {
 
     for (PsiMethod method : converterClass.findMethodsByName("parse", false)) {
       PsiParameter[] parameters = method.getParameterList().getParameters();
-      if (parameters.length == 1 && parameters[0].getType().equalsToText(WebCommonClassNames.JAVAX_HTTP_SERVLET_REQUEST)) {
+      if (parameters.length == 1 && parameters[0].getType().equalsToText(HTTP_SERVLET_REQUEST)) {
         parseMethod = method;
         break;
       }

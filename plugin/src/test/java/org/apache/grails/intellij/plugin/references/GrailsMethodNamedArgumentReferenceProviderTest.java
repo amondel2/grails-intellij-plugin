@@ -16,79 +16,64 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.grails.intellij.plugin.references;
 
-import com.intellij.openapi.progress.ProcessCanceledException;
-import com.intellij.psi.PsiElement;
-import junit.framework.TestCase;
+import com.intellij.openapi.Disposable;
+import com.intellij.openapi.util.Disposer;
+import org.apache.grails.intellij.lib.testFramework.GrailsTestCase;
 import org.apache.grails.intellij.plugin.references.GrailsMethodNamedArgumentReferenceProvider.Contributor;
-import org.jetbrains.plugins.groovy.lang.psi.api.GroovyResolveResult;
-import org.jetbrains.plugins.groovy.lang.psi.api.statements.arguments.GrNamedArgument;
+import org.jetbrains.annotations.NotNull;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
+import java.util.concurrent.atomic.AtomicInteger;
 
-public class GrailsMethodNamedArgumentReferenceProviderTest extends TestCase {
+/**
+ * The {@code org.intellij.grails.namedArgumentReferenceContributor} extension point is how an optional
+ * content module (the Spring integration) adds its named-argument references to the shared provider.
+ */
+public class GrailsMethodNamedArgumentReferenceProviderTest extends GrailsTestCase {
 
-  // ProviderProxy is private and exposes no seam, so the site is reached the way production
-  // reaches it: let createRef() call the failing provider constructor through the proxy.
-  private static final String PROXY_CLASS_NAME =
-    "org.apache.grails.intellij.plugin.references.GrailsMethodNamedArgumentReferenceProvider$ProviderProxy";
+  private static final class CountingContributor implements Contributor {
+    private final AtomicInteger myRegistrations = new AtomicInteger();
 
-  private static final ProcessCanceledException CANCELLATION = new ProcessCanceledException();
-
-  public static final class CancellingProvider extends Contributor.Provider {
-    public CancellingProvider() {
-      throw CANCELLATION;
+    @Override
+    public void register(@NotNull GrailsMethodNamedArgumentReferenceProvider registrar) {
+      myRegistrations.incrementAndGet();
     }
   }
 
-  public static final class FailingProvider extends Contributor.Provider {
-    public FailingProvider() {
-      throw new IllegalStateException("provider is broken");
-    }
+  public void testContributorsFromTheExtensionPointAreRegistered() {
+    // build (or reuse) the instance first, which installs the extension-point change listener
+    GrailsMethodNamedArgumentReferenceProvider.getInstance();
+
+    CountingContributor contributor = new CountingContributor();
+    GrailsMethodNamedArgumentReferenceProvider.EP_NAME.getPoint().registerExtension(contributor, getTestRootDisposable());
+
+    GrailsMethodNamedArgumentReferenceProvider.getInstance();
+    assertEquals("a contributor added after the first getInstance() must still be registered", 1, contributor.myRegistrations.get());
+
+    GrailsMethodNamedArgumentReferenceProvider.getInstance();
+    assertEquals("the rebuilt instance is cached until the extension point changes again", 1, contributor.myRegistrations.get());
   }
 
-  public void testCreateRefRethrowsCancellationUnwrapped() throws Exception {
-    assertSame(CANCELLATION, createRefFailure(CancellingProvider.class));
-  }
+  public void testUnloadingAContributorRebuildsTheProviderWithoutIt() {
+    GrailsMethodNamedArgumentReferenceProvider.getInstance();
 
-  public void testCreateRefStillWrapsGenuineFailure() throws Exception {
-    Throwable thrown = createRefFailure(FailingProvider.class);
-
-    assertEquals(RuntimeException.class, thrown.getClass());
-    assertTrue(thrown.getCause() instanceof InvocationTargetException);
-    assertEquals(IllegalStateException.class, thrown.getCause().getCause().getClass());
-  }
-
-  private static Throwable createRefFailure(Class<? extends Contributor.Provider> providerClass) throws Exception {
-    Class<?> proxyClass = Class.forName(PROXY_CLASS_NAME);
-    Constructor<?> constructor = proxyClass.getDeclaredConstructor(Class.class);
-    constructor.setAccessible(true);
-
-    Method createRef = proxyClass.getDeclaredMethod("createRef", PsiElement.class, GrNamedArgument.class, GroovyResolveResult.class);
-    createRef.setAccessible(true);
-
+    Disposable moduleLifetime = Disposer.newDisposable(getName());
+    CountingContributor contributor = new CountingContributor();
     try {
-      createRef.invoke(constructor.newInstance(providerClass),
-                       new Object[] {unused(PsiElement.class), unused(GrNamedArgument.class), unused(GroovyResolveResult.class)});
-    }
-    catch (InvocationTargetException e) {
-      return e.getCause();
-    }
-    fail("expected createRef() to propagate the provider constructor failure");
-    return null;
-  }
+      GrailsMethodNamedArgumentReferenceProvider.EP_NAME.getPoint().registerExtension(contributor, moduleLifetime);
+      GrailsMethodNamedArgumentReferenceProvider withContributor = GrailsMethodNamedArgumentReferenceProvider.getInstance();
+      assertEquals(1, contributor.myRegistrations.get());
 
-  /**
-   * createRef's parameters are {@code @NotNull}, so the injected check rejects null before the body
-   * runs - and ensureInit(), the method under test, is the body's first statement. An inert
-   * non-null stand-in therefore satisfies the check and is never dereferenced.
-   */
-  private static Object unused(Class<?> anInterface) {
-    return Proxy.newProxyInstance(anInterface.getClassLoader(), new Class<?>[]{anInterface}, (proxy, method, args) -> null);
+      Disposer.dispose(moduleLifetime);
+      moduleLifetime = null;
+
+      GrailsMethodNamedArgumentReferenceProvider afterUnload = GrailsMethodNamedArgumentReferenceProvider.getInstance();
+      assertNotSame("unloading the contributor's module must rebuild the provider", withContributor, afterUnload);
+      assertEquals("the unloaded contributor must not be consulted again", 1, contributor.myRegistrations.get());
+    }
+    finally {
+      if (moduleLifetime != null) Disposer.dispose(moduleLifetime);
+    }
   }
 }

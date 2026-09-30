@@ -699,7 +699,6 @@ public final class GrailsUtils {
 
   public static @Nullable TldDescriptor getTldDescriptor(@Nullable XmlFile xmlFile) {
     if (xmlFile == null) return null;
-    if (!UltimatePluginGuard.isPluginAvailable(UltimatePluginGuard.JSP_PLUGIN)) return null;
 
     final XmlDocument document = xmlFile.getDocument();
     if (document == null) return null;

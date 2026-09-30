@@ -52,11 +52,12 @@ public final class GrailsAppNodeProvider implements GrailsViewNodeProvider {
     }
 
     for (Map.Entry<String, GrailsViewItems.SpecialFolder> entry : GrailsViewItems.SPECIAL_GRAILS_APP_FOLDERS.entrySet()) {
-      addSpecialFolderNode(application, settings, project, result, entry);
-    }
-
-    for (Map.Entry<String, GrailsViewItems.SpecialFolder> entry : GrailsViewItems.SPECIAL_ASSET_FOLDERS.entrySet()) {
-      addSpecialFolderNode(application, settings, project, result, entry);
+      PsiDirectory directory = GrailsViewItems.findAppPsiDirectory(application, entry.getKey());
+      if (directory != null) {
+        GrailsViewItems.SpecialFolder data = entry.getValue();
+        result.add(new GrailsPsiDirectoryNode(directory, settings, data.icon(), data.weight(), data.title(),
+                                              GrailsViewItems::shouldShowItem));
+      }
     }
 
     PsiDirectory appRoot = PsiManager.getInstance(project).findDirectory(application.getAppRoot());
@@ -65,18 +66,5 @@ public final class GrailsAppNodeProvider implements GrailsViewNodeProvider {
     }
 
     return result;
-  }
-
-  private static void addSpecialFolderNode(@NotNull GrailsApplication application,
-                                           @NotNull ViewSettings settings,
-                                           @NotNull Project project,
-                                           @NotNull Collection<AbstractTreeNode<?>> result,
-                                           @NotNull Map.Entry<String, GrailsViewItems.SpecialFolder> entry) {
-    PsiDirectory directory = GrailsViewItems.findAppPsiDirectory(application, entry.getKey());
-    if (directory != null) {
-      GrailsViewItems.SpecialFolder data = entry.getValue();
-      result.add(new GrailsPsiDirectoryNode(directory, settings, data.icon(), data.weight(), data.title(),
-                                            GrailsViewItems::shouldShowItem));
-    }
   }
 }

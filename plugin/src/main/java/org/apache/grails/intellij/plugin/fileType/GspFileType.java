@@ -34,7 +34,6 @@ import org.apache.grails.intellij.plugin.GroovyMvcIcons;
 import org.apache.grails.intellij.plugin.lang.gsp.GspLanguage;
 import org.apache.grails.intellij.plugin.lang.gsp.lexer.core.GspTokenTypes;
 import org.apache.grails.intellij.plugin.lang.gsp.psi.gsp.impl.directive.GspDirectiveAttributeValueImpl;
-import org.apache.grails.intellij.plugin.util.UltimatePluginGuard;
 import org.jetbrains.plugins.groovy.GroovyEnabledFileType;
 
 import java.nio.charset.IllegalCharsetNameException;
@@ -49,13 +48,6 @@ public final class GspFileType extends XmlLikeFileType implements GroovyEnabledF
   public static final String GSP_EXTENSION = "gsp";
   public static final GspFileType GSP_FILE_TYPE = new GspFileType();
 
-  static {
-    // com.intellij.ultimate.PluginVerifier does not exist on Community Edition (and, in the CE
-    // test sandbox, neither does its jar even though the owning plugin id is registered). The
-    // reflective call is therefore a no-op wherever the class is absent, and only on a genuine
-    // Ultimate IDE does it get to perform its original non-Ultimate-IDE refusal.
-    UltimatePluginGuard.invokeStaticIfAvailable("com.intellij.ultimate.PluginVerifier", "verifyUltimatePlugin");
-  }
 
   private GspFileType() {
     super(GspLanguage.INSTANCE);

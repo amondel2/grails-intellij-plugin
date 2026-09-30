@@ -28,21 +28,19 @@ plugins {
 
 dependencies {
     intellijPlatform {
-        bundledPlugin 'com.intellij.javaee'
-        bundledPlugin 'com.intellij.javaee.el' // no longer transitive in 2026.2
-        bundledPlugin 'com.intellij.persistence'
-        bundledPlugin 'com.intellij.javaee.jpa'
+        // The main jar compiles against the Community Edition API only, so a reference to an
+        // Ultimate plugin fails at compile time instead of at IDE runtime. Ultimate integrations
+        // (Spring, Java EE, Database Tools, Hibernate/JPA) compile in their content modules under
+        // pluginModules/, each of which declares its own bundled plugins.
         // JspManager and TldDescriptor ship in modules of the Java plugin; the com.intellij.jsp
         // Marketplace plugin is needed only by :pluginModules-jsp, which loads when it is present.
         bundledModule 'intellij.jsp'
         bundledModule 'intellij.jsp.spi'
-        bundledPlugin 'com.intellij.javaee.web'
         bundledPlugin 'org.intellij.groovy'
-        bundledPlugin 'com.intellij.database'
         bundledPlugin 'com.intellij.gradle' // split out of org.jetbrains.plugins.gradle in 2026.2
         bundledPlugin 'org.jetbrains.plugins.gradle'
-        bundledPlugin 'com.intellij.modules.ultimate'
-        bundledPlugin 'com.intellij.microservices.jvm'
+        // JavaScript and CSS are the two Ultimate plugins the main jar still references directly,
+        // behind class-presence guards (GrailsIntegrationUtil) and <depends optional="true">.
         bundledPlugin 'JavaScript'
         bundledPlugin 'com.intellij.css'
 
@@ -50,14 +48,24 @@ dependencies {
         // owner chain to Project.project(String) and returns a Project, not a Dependency.
         pluginModule project(path: ':pluginModules-copyright')
         pluginModule project(path: ':pluginModules-coverage')
+        pluginModule project(path: ':pluginModules-database')
         pluginModule project(path: ':pluginModules-hibernate')
         pluginModule project(path: ':pluginModules-i18n')
+        pluginModule project(path: ':pluginModules-javaee')
         pluginModule project(path: ':pluginModules-jsp')
         pluginModule project(path: ':pluginModules-langInjection')
         pluginModule project(path: ':pluginModules-maven')
+        pluginModule project(path: ':pluginModules-spring')
 
-        // additional plugins required for testing
+        // additional plugins required for testing. The Ultimate ones are test-only: the Ultimate
+        // test classes (tagged UltimateOnlyTest) drive the content modules and assert against
+        // the Spring, Java EE and persistence APIs directly.
         testBundledPlugin 'com.intellij.hibernate'
+        testBundledPlugin 'com.intellij.persistence'
+        testBundledPlugin 'com.intellij.javaee.jpa'
+        testBundledPlugin 'com.intellij.javaee'
+        testBundledPlugin 'com.intellij.javaee.web' // GrailsMavenImporterTest web-facet assertions
+        testBundledPlugin 'com.intellij.spring' // GrailsSpringIntegrationTest, JamInGroovyTest
         testBundledPlugin 'HtmlTools'
         testBundledPlugin 'org.jetbrains.idea.maven'
         testBundledPlugin 'com.intellij.copyright' // GspCopyrightUpdaterTest
@@ -196,11 +204,11 @@ def fixtureJarTasks = fixtureLibraries.collect { String directory, Map<String, S
 // ---------------------------------------------------------------------------------------------
 // Community Edition targets
 //
-// The plugin ZIP is built once against Ultimate and stays a single artifact; Community Edition is
-// supported at runtime through optional <depends config-file> entries, runtime guards for the few
-// Ultimate classes that would otherwise be loaded from an unconditional code path, and these named
-// testing targets. Nobody downloads a Community distribution at configuration time -- the Azure
-// Pipelines nightly invokes these columns explicitly.
+// The plugin ZIP is built once and stays a single artifact; Community Edition is supported at
+// runtime because every Ultimate integration is a content module that is skipped when its plugins
+// are absent (see CE-SUPPORT.md). These named targets exercise that on a real IdeaIC sandbox.
+// Nobody downloads a Community distribution at configuration time: the GitHub Actions nightly
+// job invokes them explicitly with -PplatformEdition=IC.
 // ---------------------------------------------------------------------------------------------
 intellijPlatformTesting {
     // Registered only behind -PplatformEdition=IC. The IC checks belong to the opt-in Community
@@ -258,11 +266,11 @@ intellijPlatformTesting {
                 version.set(providers.gradleProperty('platformVersion'))
                 useInstaller.set(false)
                 plugins {
+                    // Only what the ideaIC distribution actually contains: it bundles neither the
+                    // CSS nor the JavaScript plugin.
                     bundledPlugins(
                             'org.intellij.groovy',
                             'com.intellij.properties',
-                            'com.intellij.css',
-                            'JavaScript',
                             'com.intellij.gradle',
                             'org.jetbrains.plugins.gradle',
                     )

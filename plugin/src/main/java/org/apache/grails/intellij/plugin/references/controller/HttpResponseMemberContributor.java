@@ -19,7 +19,6 @@
 
 package org.apache.grails.intellij.plugin.references.controller;
 
-import com.intellij.javaee.web.WebCommonClassNames;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiClass;
@@ -37,9 +36,11 @@ import org.apache.grails.intellij.plugin.util.GrailsPsiUtil;
 import org.jetbrains.plugins.groovy.lang.resolve.NonCodeMembersContributor;
 
 final class HttpResponseMemberContributor extends NonCodeMembersContributor {
+  private static final String HTTP_SERVLET_RESPONSE = "javax.servlet.http.HttpServletResponse";
+
   @Override
   protected @Nullable String getParentClassName() {
-    return WebCommonClassNames.JAVAX_HTTP_SERVLET_RESPONSE;
+    return HTTP_SERVLET_RESPONSE;
   }
 
   @Override

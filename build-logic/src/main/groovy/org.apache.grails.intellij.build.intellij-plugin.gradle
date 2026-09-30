@@ -57,24 +57,16 @@ intellijPlatform {
                 VerifyPluginTask.FailureLevel.MISSING_DEPENDENCIES,
                 VerifyPluginTask.FailureLevel.INVALID_PLUGIN,
         ]
+        // -PplatformEdition=IC verifies the Community distribution INSTEAD of the Ultimate set, with
+        // the same failure levels. That run is what proves the single ZIP loads on Community
+        // Edition (no unresolved required dependency) and that the main jar reaches for no
+        // Ultimate class: every Ultimate integration is a content module that is skipped there.
+        // The only references allowed to stay unresolved on IC are the class-presence-guarded
+        // JavaScript / CSS / graph usages listed in plugin/verifier/community-ignored-problems.txt.
+        def communityEdition = providers.gradleProperty('platformEdition').getOrElse('IU') == 'IC'
         ides {
-            // -PpluginVerifierIdes=IU-263.3889.65[,IU-...] verifies against exactly those builds
-            // instead of the Marketplace-recommended set, which is how a verdict against an EAP
-            // is reproduced (and fixed) before that EAP becomes the recommended release. CI
-            // passes nothing and stays on the recommended set.
             def requestedIdes = providers.gradleProperty('pluginVerifierIdes')
-            if (requestedIdes.isPresent()) {
-                requestedIdes.get().split(',')*.trim().findAll().each { String notation ->
-                    def (String type, String version) = notation.split('-', 2)
-                    create(type, version)
-                }
-            } else {
-                recommended()
-            }
-
-            // Community Edition verification is opt-in via -PplatformEdition=IC so the default
-            // verifyPlugin run (Ultimate, just above) never downloads a Community distribution.
-            if (providers.gradleProperty('platformEdition').getOrElse('IU') == 'IC') {
+            if (communityEdition) {
                 // useInstaller=false: the standalone IC distribution is no longer published for
                 // 2025.3+ (no IC channel in JetBrains' updates.xml), so the installer-URL resolver
                 // throws "Couldn't resolve IntellijIdeaCommunity download URL for version: '2026.2'".
@@ -83,18 +75,81 @@ intellijPlatform {
                 create(IntelliJPlatformType.IntellijIdeaCommunity, providers.gradleProperty('platformVersion')) { icConfig ->
                     icConfig.useInstaller.set(false)
                 }
-                // IC doesn't bundle the Ultimate plugins (JavaScript, CSS, Spring, JavaEE,
-                // Hibernate) that this plugin uses as optional dependencies.  Their absence
-                // makes every guarded reference "unresolved" and every <depends optional="true">
-                // report as MISSING_DEPENDENCIES — both are expected consequences of the
-                // optional-deps design, not real cross-edition hazards.  Gate the IC verifier
-                // on INVALID_PLUGIN only; the full failureLevel above applies to the IU run
-                // where all optional deps are present.
-                failureLevel = [VerifyPluginTask.FailureLevel.INVALID_PLUGIN]
+            } else if (requestedIdes.isPresent()) {
+                // -PpluginVerifierIdes=IU-263.3889.65[,IU-...] verifies against exactly those builds
+                // instead of the Marketplace-recommended set, which is how a verdict against an EAP
+                // is reproduced (and fixed) before that EAP becomes the recommended release. CI
+                // passes nothing and stays on the recommended set.
+                requestedIdes.get().split(',')*.trim().findAll().each { String notation ->
+                    def (String type, String version) = notation.split('-', 2)
+                    create(type, version)
+                }
+            } else {
+                recommended()
+            }
+        }
+        if (communityEdition) {
+            ignoredProblemsFile = layout.buildDirectory.file('verifier/community-ignored-problems.txt')
+            // IPGP's MISSING_DEPENDENCIES also fires for missing *optional* dependencies, and on IC
+            // every Ultimate plugin behind <depends optional="true"> or a content module is
+            // expected to be missing. Unresolved *required* dependencies are checked separately
+            // below (verifyPlugin doLast) from the verifier's dependency tree.
+            failureLevel = [
+                    VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
+                    VerifyPluginTask.FailureLevel.INVALID_PLUGIN,
+            ]
+        }
+    }
+}
+
+// Plugin Verifier's ignore list is versioned: one `<plugin id>:<plugin version>:<regex>` line per
+// pattern. The committed pattern file (plugin/verifier/community-ignored-problems.txt) is expanded
+// with the current version here so it never has to be edited for a release.
+def communityIgnoredProblems = tasks.register('generateCommunityVerifierIgnoreList') { task ->
+    def patterns = layout.projectDirectory.file('verifier/community-ignored-problems.txt')
+    def output = layout.buildDirectory.file('verifier/community-ignored-problems.txt')
+    def pluginVersion = project.version.toString()
+    task.description = 'Expands the Community Edition verifier ignore patterns with the plugin version'
+    task.inputs.file(patterns)
+    task.inputs.property('pluginVersion', pluginVersion)
+    task.outputs.file(output)
+    task.doLast {
+        def lines = patterns.asFile.readLines()*.trim().findAll { it && !it.startsWith('#') }
+        // the legacy id org.intellij.grails is permanent for the Marketplace listing (see plugin.xml)
+        output.get().asFile.text = lines.collect { "org.intellij.grails:${pluginVersion}:${it}" }.join('\n') + '\n'
+    }
+}
+if (providers.gradleProperty('platformEdition').getOrElse('IU') == 'IC') {
+    tasks.named('verifyPlugin') { task ->
+        task.dependsOn(communityIgnoredProblems)
+        // A required dependency the Community distribution cannot satisfy means the ZIP would not
+        // load there at all. The verifier lists it as "(failed)" without "(optional)" among the
+        // plugin's direct dependencies in dependencies.txt; optional ones are expected on IC.
+        def reportsDir = layout.buildDirectory.dir('reports/pluginVerifier')
+        task.doLast {
+            def unresolvedRequired = []
+            def dir = reportsDir.get().asFile
+            if (dir.isDirectory()) {
+                dir.eachFileRecurse { file ->
+                    if (file.name == 'dependencies.txt') {
+                        file.eachLine { line ->
+                            if ((line.startsWith('+--- ') || line.startsWith('\\--- '))
+                                && line.contains('(failed)') && !line.contains('(optional)')) {
+                                unresolvedRequired << line.trim()
+                            }
+                        }
+                    }
+                }
+            }
+            if (!unresolvedRequired.isEmpty()) {
+                throw new GradleException('Required dependencies unresolved on IntelliJ IDEA Community Edition, so the plugin would not load there:\n  '
+                                          + unresolvedRequired.join('\n  '))
             }
         }
     }
+}
 
+intellijPlatform {
     // JetBrains Marketplace code signing / publishing; secrets provided by the release workflow.
     // Providers are assigned rather than read, so absent secrets neither fail configuration nor
     // land in the configuration cache.

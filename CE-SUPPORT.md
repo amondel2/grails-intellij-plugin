@@ -17,109 +17,100 @@ limitations under the License.
 
 # Community Edition Support
 
-> Status of the Apache Grails IntelliJ plugin on IntelliJ IDEA Community Edition (CE)
-> since 262.0.1 (IDEA 2026.2+).
+The plugin ships as a single ZIP that loads on IntelliJ IDEA Ultimate with its full feature
+set and on IntelliJ IDEA Community Edition 2026.2+ with the features that do not need an
+Ultimate plugin. Since 2025.3 JetBrains publishes one IntelliJ IDEA distribution whose free mode
+is the Community feature set, so "Community Edition" below also means that distribution
+running without an Ultimate subscription. The automated checks use the `ideaIC` artifact;
+a manual smoke test on the unified distribution in free mode is still worth doing before a
+release.
+
+## How it works
+
+- `plugin.xml` declares hard dependencies only on what Community Edition ships (Java,
+  Groovy, Properties, Gradle and the JSP SPI modules the Java plugin bundles).
+- Every Ultimate-only integration is a **content module** under `pluginModules/` with its own
+  `<dependencies>`. The platform skips a content module whose dependencies are absent, so
+  nothing Ultimate-specific is ever loaded on Community Edition, and the main jar compiles
+  against the Community API only (see `plugin/build.gradle`).
+
+  | Module | Requires | Provides |
+  |--------|----------|----------|
+  | `spring` | `com.intellij.spring`, modules `intellij.spring`, `intellij.spring.core` | Injected-bean typing and completion, gutter navigation, Grails artefacts as Spring beans, Spring facet, bean-name references, rename and usage search |
+  | `javaee` | `com.intellij.javaee`, `com.intellij.javaee.web`, module `intellij.javaee.web` | Web facet auto-configuration for Grails modules |
+  | `database` | `com.intellij.database`, module `intellij.database` | Data-source detection from `DataSource.groovy` |
+  | `hibernate` | `com.intellij.hibernate`, `com.intellij.persistence`, `com.intellij.javaee.jpa` | GORM entities as a persistence unit, HQL injection and resolution |
+  | `jsp` | `com.intellij.jsp` (Marketplace) | JSP view file type and page reference search |
+  | `maven`, `coverage`, `copyright`, `i18n`, `langInjection` | bundled in both editions | Maven import, coverage, copyright, i18n and language injection |
+
+  A plugin-id dependency exposes only that plugin's *main* module to the class loader. The
+  Ultimate plugins keep their classes in content modules (`WebFacet` in `intellij.javaee.web`,
+  the Spring API in `intellij.spring`, `DataSourceDetector` in `intellij.database`), so a module
+  descriptor must name those modules explicitly. The Ultimate test suite runs on a flat
+  classpath and Plugin Verifier follows content-module dependencies, so neither notices a
+  missing module dependency; the Community verifier run and `runIde` do.
+- JavaScript, CSS and Expression Language support stay in the main jar behind class-presence
+  guards (`GrailsIntegrationUtil`) and `<depends optional="true">` entries, because they are
+  woven into the GSP formatter, PSI and syntax highlighter. Those guarded references are the
+  only ones the Community verifier is told to ignore (`plugin/verifier/community-ignored-problems.txt`).
 
 ## What works in Community Edition
 
-All of the core GSP language features work on CE without requiring IntelliJ Ultimate:
-
-- **GSP parsing and highlighting** — GSP tag/attribute recognition, syntax highlighting,
-  XML structure highlighting, error highlighting
-- **GSP formatting** — code style for GSP/HTML/Groovy embedded sections (excluding
-  JavaScript blocks, which fall back to raw text formatting)
-- **Taglibs** — Grails tag library resolution, completion, named-argument references,
-  tag namespace priority, and tag attribute name completion
-- **Domain classes** — navigation to/from domain classes, GORM method resolution,
-  `GrailsTaglibDescriptor` for all built-in tags (`g:link`, `g:render`, etc.)
-- **Controllers** — navigation, controller class recognition
-- **Views** — view resolution, template navigation
-- **Services** — service class recognition
-- **Project structure** — Grails project detection, folder structure (grails-app/views,
-  grails-app/controllers, grails-app/domain, grails-app/services), with dedicated
-  top-level nodes for `grails-app/i18n` (**Translations**) and the `grails-app/assets`
-  subfolders (**Stylesheets**, **Images**, **JavaScripts**)
-- **Run configurations** — Grails run configurations for application startup
-- **Groovy injections** — Groovy URL/expr attribute completion and highlighting
-- **Spring bean DSL** — `beans {}` definition resolution in
-  `grails-app/conf/spring/resources.groovy` and in `doWithSpring` closures of Grails plugin
-  classes (bean names, `ref()`, bean properties). The DSL contributor
-  (`GrailsResourcesGroovyMemberContributor`) is independent of the Spring plugin and loads
-  unconditionally since 262.1.0; bean-name "usage highlighting" there still needs the Spring
-  plugin and stays Ultimate-only.
-- **HTML tools** — HTML attribute completion and analysis (basic, not JSP-level)
-- **Code navigation** — go-to-definition for Grails tags, domain methods, controllers
+- GSP parsing, highlighting, formatting (JavaScript blocks fall back to raw text) and
+  structure view
+- Tag libraries: resolution, completion, named-argument references, namespace priority,
+  attribute completion
+- Domain classes and GORM: navigation, dynamic finders, criteria and detached criteria,
+  constraints, named queries
+- Controllers, services, views and templates: recognition, navigation, `request`/`response`
+  members, `render`/`respond` support
+- Project structure: Grails project detection, the Grails view pane, artefact wizards
+- Run configurations, the Grails console and the Grails Forge project wizard
+- The `beans {}` DSL in `resources.groovy` and `doWithSpring` closures
+  (`GrailsResourcesGroovyMemberContributor` does not depend on the Spring plugin)
+- Gradle and Maven importing, coverage, copyright, i18n, language injection
 
 ## What does not work in Community Edition
 
-The following features depend on Ultimate-only plugins and are gracefully degraded
-(class-presence guards prevent crashes, but the functionality is absent):
+| Feature | Needs | Behaviour on Community Edition |
+|---------|-------|--------------------------------|
+| Spring Support integration (see the `spring` module above) | Spring plugin | Module skipped |
+| Web facet auto-configuration | Jakarta EE plugins | Module skipped |
+| Data-source detection | Database Tools plugin | Module skipped |
+| GORM entities as a persistence unit, HQL injection in `find`/`executeQuery` | Hibernate, persistence and JPA plugins | Module skipped |
+| JavaScript completion, resolution and formatting inside GSP | JavaScript plugin | Falls back to plain text |
+| CSS completion in `<style>` and `style="…"` | CSS plugin | Not injected |
+| `${ }` delimiter colouring from the EL colour scheme | Expression Language plugin | Delimiters unstyled |
+| JSP tag validation and TLD taglib completion | JSP plugin (Marketplace) | Module skipped |
+| Domain class diagram | Graph API (Ultimate platform) | Editor does not open |
+| Legacy Grails 2 `web-app` node icon | Java EE icons | Platform folder icon |
 
-| Feature | Ultimate dependency | Status |
-|---------|---------------------|--------|
-| JavaScript completion in `<g:javascript>`/`<r:script>` tags | `JavaScript` plugin | Excluded (no JS completion/resolution) |
-| JavaScript formatting in GSP | `JavaScript` plugin | Excluded (JS blocks formatted as raw text) |
-| CSS completion in `<style>`/`style="..."` attributes | `com.intellij.css` plugin | Excluded (CSS not recognized in GSP) |
-| JSP tag validation (`fmt:formatNumber` etc.) | JSP plugin (Ultimate) | Excluded |
-| HTML event attribute completion (`onclick`, `ondblclick`, etc.) | Web/JSP descriptor (Ultimate) | Excluded — CE gets base attributes only |
-| HQL injection in GORM methods (`findAll`, `executeQuery`) | Hibernate plugin (Ultimate) | Excluded (HQL not injected) |
-| Spring Support plugin integration (bean-name references in GSP, injected-bean typing/completion, Spring facet, model discoverer, `@ContextConfiguration` annotation resolution) | Spring plugin (Ultimate) | Removed in 262.1.0 on **both** editions — the classes live in Spring's base `intellij.spring` module, which the installed plugin's classloader cannot see (NoClassDefFoundError even on Ultimate). The standalone `beans {}` DSL keeps working (see above). |
-| Domain Class scope view (graph visualization) | `com.intellij.openapi.graph` (Ultimate platform) | Guarded — view does not open on CE |
-| Gradle project importing (Gradle 4.x/5.x/6.x tests) | Gradle plugin test framework (Ultimate) | Excluded — base class not in plain JUnit4 sandbox |
-| Maven project importing | Maven plugin (Ultimate) | Excluded |
-
-## What was fixed during CE work
-
-The following issues were discovered and fixed to make CE support safe:
-
-- **`GspFileType` static initializer** — referenced `com.intellij.ultimate.PluginVerifier`
-  without a guard. Fixed with `UltimatePluginGuard.invokeStaticIfAvailable()` (reflective
-  no-arg static invoke, any Throwable swallowed).
-- **`GspCssInjector`** — referenced `CssFileType.INSTANCE` without a guard. On any GSP file
-  with a `style=` attribute in CE, this would throw `NoClassDefFoundError`. Fixed with
-  `GrailsIntegrationUtil.isCssSupportEnabled()` early return.
-- **`DomainClassesRelationsEditorProvider`** — the Domain Class View editor would crash on
-  CE when opened (requires `com.intellij.openapi.graph`). Fixed with
-  `GrailsIntegrationUtil.isGraphSupportEnabled()` guard in `accept()`.
-- **`UltimatePluginGuard`** — new `invokeStaticIfAvailable(className, methodName)` helper
-  added for the `GspFileType` use case (static method calls whose class may be absent).
-- **`GrailsIntegrationUtil`** — new `isGraphSupportEnabled()` class-presence check for
-  the perspectives/graph guard.
-- **Maven/Hibernate module extensions moved into module descriptors** — the 2026.2 module
-  classloader split made main-plugin config-files (`grails-maven-integration.xml`,
-  `grails-hibernate-integration.xml`) invisible to the module classloaders, so the Grails
-  project view never appeared. The Maven (5) and Hibernate (3) extension registrations were
-  relocated into their module descriptors (`org.apache.grails.intellij.module.maven.xml`,
-  `org.apache.grails.intellij.module.hibernate.xml`).
-- **`GrailsApplicationProvider` hardened** — `createGrailsApplication()` now tolerates a
-  failing provider (per-provider `try/catch`, logged warning) instead of aborting the whole
-  application/node tree, with a regression test
-  (`GrailsProjectStructureTest.testCreateGrailsApplicationSurvivesFailingProvider`).
-- **Spring plugin integration removed (both editions)** — dropped the optional
-  `com.intellij.spring` dependency, the `grails-spring-integration.xml` config file, and the
-  12 extension classes. Extends into Spring's base module fail with NoClassDefFoundError on
-  2026.2; the two self-contained DSL helpers were kept and re-registered in the main
-  `plugin.xml`. See the "What does not work" table for the feature list.
-- **IC verifier configuration** — JetBrains removed the standalone IC installer channel for
-  2025.3+. Fixed with `useInstaller.set(false)` on IC targets. IC verification failure
-  level set to `INVALID_PLUGIN` only (MISSING/COMPAT are expected from absent optional deps).
-
-## Running the CE test suite
+## Verifying a change
 
 ```bash
-# Full CE test suite (~3.5 min, ~988 tests)
+# Ultimate (default): full test suite and Plugin Verifier against the recommended IDE builds
+./gradlew test
+./gradlew verifyPlugin
+
+# Community Edition: verifier against ideaIC (fails on invalid plugin, on any unresolved class
+# not in the guarded list, and on an unresolved required dependency), the Community-safe test
+# set on an ideaIC sandbox, and a sandbox IDE for manual checks (downloads ~1GB once)
+./gradlew verifyPlugin -PplatformEdition=IC
 ./gradlew :plugin:testIdeCe -PplatformEdition=IC
-
-# Run a CE dev IDE (sandbox)
-./gradlew :plugin:runIdeCe
+./gradlew :plugin:runIdeCe -PplatformEdition=IC
 ```
 
-## Installing locally for testing
+Tests that need an Ultimate plugin are tagged `@Category(UltimateOnlyTest.class)` (class or
+method level) and are excluded from `testIdeCe`. The nightly GitHub Actions job runs the
+Community verifier and test set; pull-request builds run the Ultimate suite and verifier.
 
-The plugin ZIP is written to `plugin/build/distributions/`:
+## Adding a feature that needs an Ultimate plugin
 
-```bash
-./gradlew :plugin:buildPlugin
-```
-
-Then install via **Settings → Plugins → Install Plugin from Disk** and select the ZIP.
+1. Put the code in the matching module under `pluginModules/` (or add a module: copy
+   `pluginModules/database`, add it to `settings.gradle` and to the `pluginModule` list and
+   `<content>` block of the main plugin).
+2. Declare every plugin **and** content module the code uses in the module descriptor's
+   `<dependencies>`; find the jar with `unzip -l <IDE>/plugins/<dir>/lib/modules/*.jar`.
+3. Register the extensions in the module descriptor, not in `plugin.xml`.
+4. Run `./gradlew verifyPlugin -PplatformEdition=IC`; a new unresolved reference there means
+   the main jar reaches for an Ultimate class.

@@ -27,6 +27,11 @@
 
   <dependencies>
     <plugin id="com.intellij.hibernate"/>
+    <!-- The GORM persistence bridge (persistent/*) implements the persistence and JPA model
+         interfaces, so this module has to reach those plugins itself: the main plugin no
+         longer depends on them. -->
+    <plugin id="com.intellij.persistence"/>
+    <plugin id="com.intellij.javaee.jpa"/>
   </dependencies>
 
   <extensions defaultExtensionNs="com.intellij">

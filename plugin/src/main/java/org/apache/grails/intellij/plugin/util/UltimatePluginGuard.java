@@ -18,73 +18,38 @@
  */
 package org.apache.grails.intellij.plugin.util;
 
-import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.extensions.PluginId;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 
 /**
- * Guards the handful of code paths that touch Ultimate-only plugins from the single plugin ZIP
- * that must also load on Community Edition. The plugin ZIP is built once and plugin.xml declares
- * the Ultimate integrations as optional {@code <depends config-file=...>} entries, so the classes
- * below stay in the jar; what they must not do is *execute* on an IDE that does not install the
- * Ultimate plugin the class belongs to. Because the JVM resolves class constant-pool entries
- * lazily, a direct reference placed inside {@link #runIfPluginAvailable} or
- * {@link #callIfPluginAvailable} is never resolved on an IDE missing the plugin -- which is what
- * makes the guarded call sites safe.
+ * Reads a public static field of a class that may not be on this plugin's class path, for the two
+ * places where a cosmetic value (an icon, a text-attributes key) comes from an Ultimate-only plugin
+ * but the code that uses it has to stay in the main jar. Everything else that needs an Ultimate
+ * plugin lives in a content module with its own {@code <dependencies>} and never needs a guard.
  *
- * <p>Static-field access that would otherwise unconditionally load the owning class (icons,
- * file-type instances, editor keys) goes through {@link #staticFieldValue} instead, which
- * resolves the field reflectively and falls back to a core substitute.
+ * <p>The lookup goes through this plugin's class loader, so the owning plugin must be reachable
+ * from it: either as a hard dependency or through a {@code <depends optional="true">} entry (see
+ * {@code grails-el-integration.xml}). A class that is installed but not declared is just as absent
+ * as one that is not installed.
  */
 public final class UltimatePluginGuard {
 
   private static final Logger LOG = Logger.getInstance(UltimatePluginGuard.class);
-
-  public static final String SPRING_PLUGIN = "com.intellij.spring";
-  public static final String JAVAEE_PLUGIN = "com.intellij.javaee";
-  public static final String JSP_PLUGIN = "com.intellij.jsp";
-  public static final String EL_PLUGIN = "com.intellij.javaee.el";
 
   private static final Map<String, Object> STATIC_FIELD_CACHE = new ConcurrentHashMap<>();
 
   private UltimatePluginGuard() {
   }
 
-  /** @return {@code true} when the plugin with {@code pluginId} is installed and enabled. */
-  public static boolean isPluginAvailable(@NotNull String pluginId) {
-    return PluginManagerCore.getPlugin(PluginId.getId(pluginId)) != null;
-  }
-
-  /** Runs {@code action} only when the plugin with {@code pluginId} is present. */
-  public static void runIfPluginAvailable(@NotNull String pluginId, @NotNull Runnable action) {
-    if (isPluginAvailable(pluginId)) {
-      action.run();
-    }
-  }
-
   /**
-   * Runs {@code action} only when the plugin with {@code pluginId} is present, returning
-   * {@code fallback} otherwise. Used for expression-producing call sites whose result is only
-   * meaningful on the owning plugin.
-   */
-  public static <T> T callIfPluginAvailable(@NotNull String pluginId, @NotNull Supplier<T> action, T fallback) {
-    return isPluginAvailable(pluginId) ? action.get() : fallback;
-  }
-
-  /**
-   * Reads the value of the public static field {@code fieldName} on {@code className} by
-   * reflection, caching the result, returning {@code fallback} when the class or field is not
-   * available. Prevents loading Ultimate-only classes on an IDE that does not install them.
-   *
-   * <p>The catch is {@code Throwable} because loading a missing Ultimate class can fail with an
-   * {@link Error} too; the guard runs first so a cancelled read unwinds instead of being logged
-   * and answered with the fallback.
+   * Returns the value of the public static field {@code fieldName} on {@code className}, or
+   * {@code fallback} when the class cannot be loaded, has no such field, or the field is not
+   * readable. Successful reads are cached; a failed read is logged once at debug level and
+   * repeated on the next call, which only happens on an IDE without the owning plugin.
    */
   public static @Nullable <T> T staticFieldValue(@NotNull String className, @NotNull String fieldName, @Nullable T fallback) {
     String key = className + '#' + fieldName;
@@ -96,35 +61,15 @@ public final class UltimatePluginGuard {
     }
     try {
       Object value = Class.forName(className).getField(fieldName).get(null);
+      if (value == null) return fallback;
       STATIC_FIELD_CACHE.put(key, value);
       @SuppressWarnings("unchecked")
       T typed = (T)value;
       return typed;
     }
-    catch (Throwable e) {
-      ControlFlowGuard.rethrowIfControlFlow(e);
-      LOG.warn("Cannot read static field " + key + "; using fallback", e);
+    catch (ClassNotFoundException | NoSuchFieldException | IllegalAccessException | LinkageError e) {
+      LOG.debug("Cannot read static field " + key + ", using the fallback", e);
       return fallback;
-    }
-  }
-
-  /**
-   * Invokes the public static no-arg method {@code methodName} on {@code className} by reflection,
-   * doing nothing when the class or method is not present. Same contract as {@link #staticFieldValue}
-   * for methods: a guard whose predicate is the class being loaded rather than a plugin id, which
-   * is what makes it safe for classes whose owning plugin is registered even when the class jar
-   * itself is absent (e.g. the full-platform module set leaking into a Community test sandbox).
-   *
-   * <p>Same reason for the {@code Throwable} catch and the guard-first rule as
-   * {@link #staticFieldValue}: an absent module is tolerated, a cancellation is not swallowed.
-   */
-  public static void invokeStaticIfAvailable(@NotNull String className, @NotNull String methodName) {
-    try {
-      Class.forName(className).getMethod(methodName).invoke(null);
-    }
-    catch (Throwable e) {
-      ControlFlowGuard.rethrowIfControlFlow(e);
-      LOG.debug("Cannot invoke static method " + className + '#' + methodName, e);
     }
   }
 }

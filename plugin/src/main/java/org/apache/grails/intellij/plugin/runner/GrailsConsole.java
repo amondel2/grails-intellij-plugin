@@ -70,7 +70,6 @@ import org.jetbrains.annotations.Nullable;
 import org.apache.grails.intellij.plugin.GrailsBundle;
 import org.apache.grails.intellij.plugin.GroovyMvcIcons;
 import org.apache.grails.intellij.plugin.mvc.ConsoleProcessDescriptor;
-import org.apache.grails.intellij.plugin.util.ControlFlowGuard;
 
 import javax.swing.JComponent;
 import java.io.IOException;
@@ -321,22 +320,15 @@ public final class GrailsConsole implements Disposable, PersistentStateComponent
       });
     }
     catch (final ExecutionException ex) {
+      ExecutionUtil.handleExecutionError(myProject, TOOL_WINDOW_ID, "Grails", ex);
+      LOG.info(ex);
       try {
-        ExecutionUtil.handleExecutionError(myProject, TOOL_WINDOW_ID, "Grails", ex);
-        LOG.info(ex);
-        try {
-          if (onDone != null) onDone.run();
-        }
-        catch (Exception e) {
-          // A cancellation is not a failure, so it propagates - but the release below must happen
-          // either way, or the console stays busy and every later command queues forever.
-          ControlFlowGuard.rethrowIfControlFlow(e);
-          LOG.error(e);
-        }
+        if (onDone != null) onDone.run();
       }
-      finally {
-        myExecuting = false;
+      catch (Exception e) {
+        LOG.error(e);
       }
+      myExecuting = false;
       return;
     }
 
@@ -364,22 +356,17 @@ public final class GrailsConsole implements Disposable, PersistentStateComponent
           if (onDone != null) onDone.run();
         }
         catch (Exception e) {
-          // A cancellation is not a failure, so it propagates - but the teardown below must happen
-          // either way, or the console stays busy and the next queued command never starts.
-          ControlFlowGuard.rethrowIfControlFlow(e);
           LOG.error(e);
         }
-        finally {
-          myConsole.print("\n", ConsoleViewContentType.NORMAL_OUTPUT);
-          myKillAction.setHandler(null);
-          myContent.setDisplayName("");
+        myConsole.print("\n", ConsoleViewContentType.NORMAL_OUTPUT);
+        myKillAction.setHandler(null);
+        myContent.setDisplayName("");
 
-          myExecuting = false;
+        myExecuting = false;
 
-          final MyProcessInConsole pic1 = myProcessQueue.poll();
-          if (pic1 != null) {
-            executeProcessImpl(pic1, false);
-          }
+        final MyProcessInConsole pic1 = myProcessQueue.poll();
+        if (pic1 != null) {
+          executeProcessImpl(pic1, false);
         }
       }, modalityState);
     });

@@ -36,7 +36,7 @@ public class GrailsPsiDirectoryNodeTest extends GrailsTestCase {
 
   public void testRendersCustomTitleAndIcon() {
     GrailsPsiDirectoryNode node = nodeWithCustomPresentation("grails-app/i18n/messages.properties", "Translations",
-                                                           AllIcons.FileTypes.Properties, NodeWeights.TRANSLATIONS_FOLDER);
+                                                           AllIcons.FileTypes.Properties, NodeWeights.CONFIG_FOLDER);
 
     PresentationData data = new PresentationData();
     node.updateImpl(data);

@@ -103,8 +103,9 @@ jobs:
           path: plugin/build/reports/pluginVerifier
   test-ce:
     name: 'Community Edition Tests'
-    # Nightly only: needs a fresh IdeaIC 2026.2 distribution, gated with -PplatformEdition=IC so the
-    # single plugin ZIP is verified to load and its CE-safe test set runs without the Ultimate plugins.
+    # Nightly only: needs the IdeaIC 2026.2 distribution (~1GB). -PplatformEdition=IC runs the
+    # Community-safe test set on that sandbox and points Plugin Verifier at IC, which is what
+    # proves the ZIP loads there and that the main jar reaches for no Ultimate class.
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
@@ -114,19 +115,25 @@ jobs:
         id: sdkmanrc
         run: echo "java=$(grep -E '^java=' .sdkmanrc | cut -d= -f2 | sed 's/-librca$//')" >> "$GITHUB_OUTPUT"
       - name: "☕️ Setup JDK"
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: liberica # .sdkmanrc pins librca = Liberica
           java-version: ${{ steps.sdkmanrc.outputs.java }}
       - name: "🐘 Setup Gradle"
-        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-provider: basic # see note above
-      - name: "🏗️ Community Edition build & tests"
-        run: ./gradlew :plugin:testIdeCe buildPlugin -PplatformEdition=IC
+      - name: "🏗️ Community Edition build, tests & verifier"
+        run: ./gradlew :plugin:testIdeCe verifyPlugin buildPlugin -PplatformEdition=IC
       - name: "📋 Upload Community test report"
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: plugin-test-ce-report
           path: plugin/build/reports/tests/testIdeCe
+      - name: "📋 Upload Community verifier report"
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plugin-verifier-ce-report
+          path: plugin/build/reports/pluginVerifier

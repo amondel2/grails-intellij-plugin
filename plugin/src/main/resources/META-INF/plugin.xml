@@ -34,9 +34,13 @@
   <vendor url="https://grails.apache.org/">Apache Software Foundation</vendor>
 
   <!--
-    Hard dependencies are restricted to the Community Edition platform. Ultimate-only
-    integrations (Java EE, Maven, Hibernate) are declared as optional
-    <depends config-file="..."> entries below and load through the *-integration.xml files.
+    Hard dependencies are restricted to what IntelliJ IDEA Community Edition ships. Every
+    Ultimate-only integration (Spring, Java EE web facets, Database Tools, Hibernate/JPA) lives
+    in a content module under <content> below with its own <dependencies>, so the module is
+    simply skipped when its plugins are absent and the main jar never references their API.
+    JavaScript, CSS and EL are the exceptions: their code stays in the main jar behind
+    class-presence guards, and the <depends optional="true"> entries give the main class loader
+    access to those plugins whenever they are installed.
   -->
   <dependencies>
     <plugin id="com.intellij.java"/>
@@ -59,13 +63,17 @@
     <module name="org.apache.grails.intellij.module.jsp"/>
     <module name="org.apache.grails.intellij.module.maven"/>
     <module name="org.apache.grails.intellij.module.hibernate"/>
-    <module name="org.apache.grails.intellij.module.langInjection" loading="required"/>
+    <module name="org.apache.grails.intellij.module.langInjection"/>
     <module name="org.apache.grails.intellij.module.coverage"/>
+    <!-- Ultimate-only integrations; each declares the plugins and modules it needs and is skipped on Community Edition -->
+    <module name="org.apache.grails.intellij.module.spring"/>
+    <module name="org.apache.grails.intellij.module.javaee"/>
+    <module name="org.apache.grails.intellij.module.database"/>
   </content>
 
   <depends optional="true" config-file="grails-js-integration.xml">JavaScript</depends>
   <depends optional="true" config-file="grails-css-integration.xml">com.intellij.css</depends>
-  <depends optional="true" config-file="grails-javaee-integration.xml">com.intellij.javaee</depends>
+  <depends optional="true" config-file="grails-el-integration.xml">com.intellij.javaee.el</depends>
 
   <resource-bundle>messages.GrailsBundle</resource-bundle>
 
@@ -78,6 +86,7 @@
     <extensionPoint name="viewNodeProvider" dynamic="true" interface="org.apache.grails.intellij.plugin.projectView.api.GrailsViewNodeProvider"/>
     <extensionPoint name="gspJsInjectionTag" dynamic="true" beanClass="org.apache.grails.intellij.plugin.addins.js.GspJsInjectionTagBean"/>
     <extensionPoint name="viewFileTypeProvider" dynamic="true" interface="org.apache.grails.intellij.plugin.fileType.GrailsViewFileTypeProvider"/>
+    <extensionPoint name="namedArgumentReferenceContributor" dynamic="true" interface="org.apache.grails.intellij.plugin.references.GrailsMethodNamedArgumentReferenceProvider$Contributor"/>
   </extensionPoints>
 
   <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">

@@ -16,91 +16,53 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.grails.intellij.plugin.util;
 
-import com.intellij.openapi.diagnostic.ControlFlowException;
-import com.intellij.openapi.progress.ProcessCanceledException;
 import junit.framework.TestCase;
 
-/**
- * Covers the guard-first rule in {@link UltimatePluginGuard}'s reflective reads. A throwing static
- * initialiser is the only way to put a control-flow exception into that code, and the JVM wraps a
- * non-{@link Error} thrown from {@code <clinit>} in an {@link ExceptionInInitializerError} before
- * {@code Class.forName} can report it - so the doubles below are {@code Error}s, which arrive
- * unchanged, and {@code ProcessCanceledException} could not be used here at all.
- */
 public class UltimatePluginGuardTest extends TestCase {
 
-  /**
-   * Stands in for the platform's control-flow exceptions, which are all
-   * {@link java.util.concurrent.CancellationException}s and therefore not {@code Error}s.
-   */
-  private static final class ControlFlowError extends Error implements ControlFlowException {
-  }
+  /** A class whose static initialiser fails, which the JVM reports as a {@link LinkageError}. */
+  public static final class BrokenInitialiser {
+    public static final String VALUE = broken();
 
-  /** Each of these is initialised at most once per JVM: a failed initialisation is permanent. */
-  public static final class CancelledStaticField {
-    public static final String VALUE = cancelled();
-
-    public static void touch() {
-    }
-
-    private static String cancelled() {
-      throw new ControlFlowError();
+    private static String broken() {
+      throw new IllegalStateException("static initialiser failed on purpose");
     }
   }
 
-  public static final class CancelledStaticMethod {
-    public static final String VALUE = cancelled();
-
-    public static void touch() {
-    }
-
-    private static String cancelled() {
-      throw new ControlFlowError();
-    }
+  public static final class Fixture {
+    public static final String VALUE = "present";
+    public static final String NULL_VALUE = null;
   }
 
-  public static final class ProcessCanceledStaticField {
-    public static final String VALUE = cancelled();
-
-    private static String cancelled() {
-      throw new ProcessCanceledException();
-    }
+  public void testReadsAPresentField() {
+    assertEquals("present", UltimatePluginGuard.staticFieldValue(Fixture.class.getName(), "VALUE", "FALLBACK"));
   }
 
-  public void testStaticFieldValueRethrowsControlFlowException() {
-    try {
-      UltimatePluginGuard.staticFieldValue(CancelledStaticField.class.getName(), "VALUE", "FALLBACK");
-      fail("expected the control-flow exception to propagate instead of the fallback");
-    }
-    catch (ControlFlowError expected) {
-      // arrived unchanged, and the guard's LOG.warn/fallback pair never ran
-    }
+  public void testPresentFieldIsCachedAndReturnedAgain() {
+    assertEquals("present", UltimatePluginGuard.staticFieldValue(Fixture.class.getName(), "VALUE", "FALLBACK"));
+    assertEquals("present", UltimatePluginGuard.staticFieldValue(Fixture.class.getName(), "VALUE", "OTHER"));
   }
 
-  public void testInvokeStaticIfAvailableRethrowsControlFlowException() {
-    try {
-      UltimatePluginGuard.invokeStaticIfAvailable(CancelledStaticMethod.class.getName(), "touch");
-      fail("expected the control-flow exception to propagate instead of being swallowed");
-    }
-    catch (ControlFlowError expected) {
-      // arrived unchanged, and the guard's silent LOG.debug never ran
-    }
-  }
-
-  public void testGenuineFailureStillUsesTheFallback() {
+  public void testMissingClassUsesTheFallback() {
     assertEquals("FALLBACK",
                  UltimatePluginGuard.staticFieldValue("no.such.UltimatePluginGuardFixture", "FIELD", "FALLBACK"));
-    UltimatePluginGuard.invokeStaticIfAvailable("no.such.UltimatePluginGuardFixture", "touch");
   }
 
-  public void testProcessCanceledExceptionFromStaticInitialiserIsUnreachable() {
-    // Documents the premise of the two tests above, so neither is "simplified" back to a
-    // ProcessCanceledException: here the guard sees the JVM's wrapper, not the cancellation, and
-    // the only honest outcome is the fallback.
-    assertEquals("FALLBACK",
-                 UltimatePluginGuard.staticFieldValue(ProcessCanceledStaticField.class.getName(), "VALUE", "FALLBACK"));
+  public void testMissingFieldUsesTheFallback() {
+    assertEquals("FALLBACK", UltimatePluginGuard.staticFieldValue(Fixture.class.getName(), "NO_SUCH_FIELD", "FALLBACK"));
+  }
+
+  public void testNullFieldValueUsesTheFallback() {
+    assertEquals("FALLBACK", UltimatePluginGuard.staticFieldValue(Fixture.class.getName(), "NULL_VALUE", "FALLBACK"));
+  }
+
+  public void testFailedStaticInitialiserUsesTheFallback() {
+    assertEquals("FALLBACK", UltimatePluginGuard.staticFieldValue(BrokenInitialiser.class.getName(), "VALUE", "FALLBACK"));
+  }
+
+  public void testNullFallbackIsAllowed() {
+    assertNull(UltimatePluginGuard.staticFieldValue("no.such.UltimatePluginGuardFixture", "FIELD", null));
   }
 }
