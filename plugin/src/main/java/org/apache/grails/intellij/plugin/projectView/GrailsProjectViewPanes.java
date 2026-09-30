@@ -21,8 +21,9 @@ package org.apache.grails.intellij.plugin.projectView;
 
 import com.intellij.ide.projectView.ProjectView;
 import com.intellij.ide.projectView.impl.AbstractProjectViewPane;
-import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Computable;
 import org.jetbrains.annotations.NotNull;
 import org.apache.grails.intellij.plugin.config.GrailsConstants;
 import org.apache.grails.intellij.plugin.gradle.GrailsGradleSyncStatus;
@@ -44,7 +45,8 @@ public final class GrailsProjectViewPanes {
     boolean hasPane = projectView.getPaneIds().contains(ID);
     // A grails-app folder whose Gradle import failed has no application, but the pane still has
     // something to say about it (GrailsGradleSyncProblemNode), so it stays visible for those too.
-    boolean hasBlockedRoots = ReadAction.compute(() -> !GrailsGradleSyncStatus.getInstance(project).findBlockedGrailsRoots().isEmpty());
+    boolean hasBlockedRoots = ApplicationManager.getApplication().runReadAction(
+      (Computable<Boolean>)() -> !GrailsGradleSyncStatus.getInstance(project).findBlockedGrailsRoots().isEmpty());
     if (grailsApplicationManager.hasApplications() || hasBlockedRoots) {
       if (!hasPane) {
         projectView.addProjectPane(getPane(project));

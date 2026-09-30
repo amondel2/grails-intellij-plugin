@@ -100,7 +100,7 @@ public final class GrailsMethodNamedArgumentReferenceProvider extends PsiReferen
       }
       if (!epListenerInstalled) {
         epListenerInstalled = true;
-        EP_NAME.addChangeListener(() -> instance = null, null);
+        EP_NAME.getPoint().addChangeListener(() -> instance = null, null);
       }
 
       instance = res;
