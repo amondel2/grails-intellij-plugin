@@ -311,6 +311,8 @@
     <highlightErrorFilter implementation="org.apache.grails.intellij.plugin.lang.gsp.GspErrorFilter" />
 
     <projectService serviceImplementation="org.apache.grails.intellij.plugin.config.GrailsSettingsService"/>
+    <projectService serviceImplementation="org.apache.grails.intellij.plugin.gradle.GrailsGradleSyncStatus"/>
+    <externalSystemTaskNotificationListener implementation="org.apache.grails.intellij.plugin.gradle.GrailsGradleSyncTaskListener"/>
 
     <projectService serviceImplementation="org.apache.grails.intellij.plugin.lang.gsp.psi.gsp.impl.gtag.GspTagDescriptorService"/>
 
@@ -380,6 +382,7 @@
     <postStartupActivity implementation="org.apache.grails.intellij.plugin.structure.GrailsApplicationManagerRefresher"/>
     <backgroundPostStartupActivity implementation="org.apache.grails.intellij.plugin.structure.sync.GrailsMvcStructureRefresher"/>
     <editorNotificationProvider implementation="org.apache.grails.intellij.plugin.editor.GrailsEditorDecorator"/>
+    <editorNotificationProvider implementation="org.apache.grails.intellij.plugin.editor.GrailsGradleSyncNotificationProvider"/>
     <projectViewPane implementation="org.apache.grails.intellij.plugin.projectView.GrailsProjectViewPane"/>
     <treeStructureProvider implementation="org.apache.grails.intellij.plugin.projectView.GrailsTreeStructureProvider"/>
     <multiHostInjector implementation="org.apache.grails.intellij.plugin.pluginSupport.assetPipeline.AssetScriptInjector"/>
@@ -390,6 +393,7 @@
     <notificationGroup id="Grails notifications" displayType="TOOL_WINDOW" toolWindowId="Grails Console" bundle="messages.GrailsBundle" key="notification.group.grails.notifications"/>
     <notificationGroup id="grails" displayType="BALLOON" bundle="messages.GrailsBundle" key="notification.group.grails"/>
     <notificationGroup id="Grails Configure" displayType="BALLOON" key="notification.group.display.name.grails.configure"/>
+    <notificationGroup id="Grails Gradle import" displayType="BALLOON" bundle="messages.GrailsBundle" key="notification.group.grails.gradle.sync"/>
     <postStartupActivity implementation="org.apache.grails.intellij.plugin.mvc.MvcModuleStructureSynchronizer$MyPostStartUpActivity"/>
     <roots.watchedRootsProvider implementation="org.apache.grails.intellij.plugin.mvc.MvcWatchedRootProvider"/>
     <pathMacroContributor implementation="org.apache.grails.intellij.plugin.mvc.MvcPathMacros"/>

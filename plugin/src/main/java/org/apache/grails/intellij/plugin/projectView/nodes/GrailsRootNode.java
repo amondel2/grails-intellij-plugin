@@ -22,9 +22,12 @@ package org.apache.grails.intellij.plugin.projectView.nodes;
 import com.intellij.ide.projectView.PresentationData;
 import com.intellij.ide.projectView.ProjectViewNode;
 import com.intellij.ide.projectView.ViewSettings;
+import com.intellij.ide.util.treeView.AbstractTreeNode;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
+import org.apache.grails.intellij.plugin.gradle.GrailsGradleSyncStatus;
 import org.apache.grails.intellij.plugin.structure.GrailsApplication;
 import org.apache.grails.intellij.plugin.structure.GrailsApplicationManager;
 
@@ -38,10 +41,16 @@ public class GrailsRootNode extends ProjectViewNode<Project> {
   }
 
   @Override
-  public @NotNull List<GrailsApplicationNode> getChildren() {
-    List<GrailsApplicationNode> result = new ArrayList<>();
-    for (GrailsApplication application : GrailsApplicationManager.getInstance(getValue()).getApplications()) {
+  public @NotNull List<AbstractTreeNode<?>> getChildren() {
+    Project project = getValue();
+    List<AbstractTreeNode<?>> result = new ArrayList<>();
+    for (GrailsApplication application : GrailsApplicationManager.getInstance(project).getApplications()) {
       result.add(new GrailsApplicationNode(application, getSettings()));
+    }
+    // grails-app folders the plugin cannot recognise because their Gradle import failed or never ran:
+    // shown where their application node would be, so the pane says why instead of staying empty
+    for (GrailsGradleSyncStatus.BlockedGrailsRoot blocked : GrailsGradleSyncStatus.getInstance(project).findBlockedGrailsRoots()) {
+      result.add(new GrailsGradleSyncProblemNode(project, blocked, getSettings()));
     }
     return result;
   }
@@ -52,6 +61,11 @@ public class GrailsRootNode extends ProjectViewNode<Project> {
 
   @Override
   public boolean contains(@NotNull VirtualFile file) {
-    return GrailsApplicationManager.getInstance(getValue()).findApplication(file) != null;
+    Project project = getValue();
+    if (GrailsApplicationManager.getInstance(project).findApplication(file) != null) return true;
+    for (GrailsGradleSyncStatus.BlockedGrailsRoot blocked : GrailsGradleSyncStatus.getInstance(project).findBlockedGrailsRoots()) {
+      if (VfsUtilCore.isAncestor(blocked.root(), file, false)) return true;
+    }
+    return false;
   }
 }

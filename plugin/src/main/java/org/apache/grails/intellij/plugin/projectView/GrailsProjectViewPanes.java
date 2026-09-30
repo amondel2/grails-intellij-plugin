@@ -21,9 +21,11 @@ package org.apache.grails.intellij.plugin.projectView;
 
 import com.intellij.ide.projectView.ProjectView;
 import com.intellij.ide.projectView.impl.AbstractProjectViewPane;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 import org.apache.grails.intellij.plugin.config.GrailsConstants;
+import org.apache.grails.intellij.plugin.gradle.GrailsGradleSyncStatus;
 import org.apache.grails.intellij.plugin.structure.GrailsApplicationManager;
 
 import java.util.Objects;
@@ -40,7 +42,10 @@ public final class GrailsProjectViewPanes {
     GrailsApplicationManager grailsApplicationManager = GrailsApplicationManager.getInstance(project);
     ProjectView projectView = ProjectView.getInstance(project);
     boolean hasPane = projectView.getPaneIds().contains(ID);
-    if (grailsApplicationManager.hasApplications()) {
+    // A grails-app folder whose Gradle import failed has no application, but the pane still has
+    // something to say about it (GrailsGradleSyncProblemNode), so it stays visible for those too.
+    boolean hasBlockedRoots = ReadAction.compute(() -> !GrailsGradleSyncStatus.getInstance(project).findBlockedGrailsRoots().isEmpty());
+    if (grailsApplicationManager.hasApplications() || hasBlockedRoots) {
       if (!hasPane) {
         projectView.addProjectPane(getPane(project));
       }
@@ -48,6 +53,12 @@ public final class GrailsProjectViewPanes {
     else if (hasPane) {
       projectView.removeProjectPane(getPane(project));
     }
+  }
+
+  /** Rebuilds the pane's tree, e.g. after a Gradle import changed which roots are blocked. */
+  public static void refresh(@NotNull Project project) {
+    AbstractProjectViewPane pane = ProjectView.getInstance(project).getProjectViewPaneById(ID);
+    if (pane != null) pane.updateFromRoot(true);
   }
 
   private static @NotNull AbstractProjectViewPane getPane(@NotNull Project project) {

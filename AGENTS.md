@@ -23,7 +23,7 @@ limitations under the License.
 ## Quick Reference
 
 ```bash
-# Compile and run all tests (~5 min, ~1070 tests)
+# Compile and run all tests (~5 min, ~1080 tests)
 ./gradlew test
 
 # Single test class / single test method
@@ -146,7 +146,7 @@ Special packaging: `plugin/standardDsls/` sits outside the resource roots and is
 
 ## Running & Debugging Tests
 
-- Full suite: `./gradlew test` — ~5 min, 1069 tests across 202 classes.
+- Full suite: `./gradlew test` — ~5 min, 1082 tests across 205 classes.
 - Failure details live in `plugin/build/test-results/test/TEST-<fqcn>.xml`; the `<system-out>`
   CDATA holds logged output. The giant module-list line and
   `InstanceNotOverridable`/SLF4J warnings are noise — ignore them.
