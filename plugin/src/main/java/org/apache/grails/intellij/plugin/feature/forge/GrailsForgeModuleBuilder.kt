@@ -20,6 +20,7 @@
 package org.apache.grails.intellij.plugin.feature.forge
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.intellij.ide.starters.local.StarterModuleBuilder
 import com.intellij.ide.starters.remote.SERVER_APPLICATION_TYPES
 import com.intellij.ide.starters.remote.SERVER_LANGUAGE_LEVELS_KEY
@@ -48,6 +49,7 @@ import com.intellij.ui.dsl.builder.BottomGap
 import com.intellij.ui.dsl.builder.Panel
 import com.intellij.util.Url
 import com.intellij.util.Urls
+import com.intellij.util.io.HttpRequests
 import org.apache.grails.intellij.plugin.GrailsBundle
 import org.apache.grails.intellij.plugin.GroovyMvcIcons
 import java.io.File
@@ -108,8 +110,36 @@ internal class GrailsForgeModuleBuilder : WebStarterModuleBuilder() {
 
   override fun getFilePathsToOpen(): List<String> = listOf("README.md")
 
+  /**
+   * Fetches and parses a Grails Forge JSON document with the Jackson 2 [ObjectMapper] that every
+   * supported IDE build bundles. The platform's [WebStarterModuleBuilder.loadJsonData] is
+   * deliberately not used: IntelliJ 2026.3 changed its return type to the Jackson 3 `JsonNode`, so
+   * a call compiled against 2026.2 does not link there, and one compiled against 2026.3 would not
+   * link on 2026.2. Doing the request here keeps one plugin build valid for both.
+   */
+  private fun loadForgeJson(url: String): JsonNode {
+    return HttpRequests.request(url)
+      .productNameAsUserAgent()
+      .accept("application/json")
+      .connect { request ->
+        val reader = try {
+          request.reader
+        }
+        catch (e: IOException) {
+          throw IOException(HttpRequests.createErrorMessage(e, request, false), e)
+        }
+        val node = try {
+          FORGE_JSON.readTree(reader)
+        }
+        catch (e: IOException) {
+          throw IOException("Error parsing the JSON response from $url", e)
+        }
+        node ?: throw IOException("Error parsing the JSON response from $url: empty document")
+      }
+  }
+
   override fun loadServerOptions(serverUrl: String): WebStarterServerOptions {
-    val json = loadJsonData(serverUrl.removeSuffix("/") + "/select-options")
+    val json = loadForgeJson(serverUrl.removeSuffix("/") + "/select-options")
 
     return handleOptionsJson(serverUrl, json)
   }
@@ -129,7 +159,7 @@ internal class GrailsForgeModuleBuilder : WebStarterModuleBuilder() {
       loadFeatures(serverUrl, it.id, descriptionLinkPattern)
     }
 
-    val versionsJson = loadJsonData(serverUrl.removeSuffix("/") + "/versions")
+    val versionsJson = loadForgeJson(serverUrl.removeSuffix("/") + "/versions")
     val version = versionsJson.get("versions")?.get("grails.version")?.asText()
                   ?: throw IOException("Unable to read Grails version")
 
@@ -159,7 +189,7 @@ internal class GrailsForgeModuleBuilder : WebStarterModuleBuilder() {
   private fun loadFeatures(serverUrl: String,
                            appTypeId: String,
                            descriptionLinkPattern: Pattern): Collection<WebStarterDependencyCategory> {
-    val featuresRoot = loadJsonData(serverUrl.removeSuffix("/") + "/application-types/${appTypeId}/features")
+    val featuresRoot = loadForgeJson(serverUrl.removeSuffix("/") + "/application-types/${appTypeId}/features")
     val categories = mutableMapOf<String, GrailsFeatureCategory>()
 
     for (featureElement in featuresRoot.get("features")) {
@@ -301,5 +331,9 @@ internal class GrailsForgeModuleBuilder : WebStarterModuleBuilder() {
     HIBERNATE("HIBERNATE", "Hibernate"),
     MONGODB("MONGODB", "MongoDB"),
     NEO4J("NEO4J", "Neo4j")
+  }
+
+  companion object {
+    private val FORGE_JSON = ObjectMapper()
   }
 }
