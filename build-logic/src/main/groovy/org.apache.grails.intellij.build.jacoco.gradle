@@ -31,6 +31,13 @@ jacoco {
 }
 
 tasks.withType(Test).configureEach { task ->
+    // IntelliJ's plugin class loaders define classes without a code-source location, and the
+    // JaCoCo agent skips such classes unless told otherwise. Without this the execution data
+    // holds only the Gradle test-worker classes and every plugin class reports 0%. The JDK's
+    // internal classes have no location either and are excluded as JaCoCo recommends.
+    task.jacoco.includeNoLocationClasses = true
+    task.jacoco.excludes = ['jdk.internal.*']
+
     // The Community Edition test task is registered behind -PplatformEdition=IC and lives on its
     // own IdeaIC sandbox; it must not finalize the Ultimate coverage reports, which would drag the
     // IdeaIC download into a routine `./gradlew test`.
@@ -45,4 +52,18 @@ tasks.withType(JacocoReport).configureEach {
         html.required = true
         csv.required = false
     }
+}
+
+// IntelliJ Platform projects do not run their tests against build/classes: IPGP installs the
+// plugin into the test sandbox and the IDE loads it from those jars, which are built from the
+// *instrumented* classes (instrumentCode adds the @NotNull assertions). JaCoCo keys execution
+// data by class identity, so a report that analyses build/classes (the jacoco plugin's default)
+// matches nothing and shows 0% for every class. Point the report at the instrumented output
+// instead, where the task exists; plain libraries keep the default.
+tasks.withType(JacocoReport).configureEach { report ->
+    def instrumentCode = tasks.matching { it.name == 'instrumentCode' }
+    report.classDirectories.setFrom(project.provider {
+        instrumentCode.isEmpty() ? sourceSets.main.output.classesDirs : instrumentCode.collect { it.outputs.files }
+    })
+    report.dependsOn(instrumentCode)
 }

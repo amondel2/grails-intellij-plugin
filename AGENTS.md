@@ -180,6 +180,13 @@ Special packaging: `plugin/standardDsls/` sits outside the resource roots and is
 - The legacy plugin id `org.intellij.grails` is grandfathered on Marketplace and
   permanent for the existing listing (see `IMPROVEMENT-PLAN.md`); the `TemplateWordInPluginId` check is muted
   deliberately.
+- **Coverage needs two non-default JaCoCo settings** (both in the `jacoco` and
+  `coverage-aggregation` convention plugins): the tests load the plugin from the sandbox jars,
+  which are built from the *instrumented* classes, so reports must analyse
+  `build/instrumented/instrumentCode` rather than `build/classes`; and IntelliJ's plugin class
+  loaders define classes without a code-source location, so the agent needs
+  `includeNoLocationClasses = true` or the exec file contains only Gradle worker classes. Either
+  one missing shows up as 0% for every class, not as an error.
 
 ## Pull Request Guidelines
 
