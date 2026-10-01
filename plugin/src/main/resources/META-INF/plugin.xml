@@ -33,31 +33,25 @@
   </description>
   <vendor url="https://grails.apache.org/">Apache Software Foundation</vendor>
 
+  <!--
+    Hard dependencies are restricted to what IntelliJ IDEA Community Edition ships. Every
+    Ultimate-only integration (Spring, Java EE web facets, Database Tools, Hibernate/JPA) lives
+    in a content module under <content> below with its own <dependencies>, so the module is
+    simply skipped when its plugins are absent and the main jar never references their API.
+    JavaScript, CSS and EL are the exceptions: their code stays in the main jar behind
+    class-presence guards, and the <depends optional="true"> entries give the main class loader
+    access to those plugins whenever they are installed.
+  -->
   <dependencies>
     <plugin id="com.intellij.java"/>
-    <plugin id="com.intellij.javaee"/>
-    <plugin id="com.intellij.javaee.web"/>
-    <module name="intellij.javaee.platform"/>
-    <module name="intellij.javaee.platform.impl"/>
-    <plugin id="com.intellij.persistence"/>
-    <plugin id="com.intellij.javaee.jpa"/>
-    <!-- com.intellij.jsp itself is a Marketplace plugin since 2026.2; the classes the plugin uses
+    <!-- com.intellij.jsp itself is a Marketplace plugin since 2026.2; the classes the core uses
          (TldDescriptor, JspManager) come from the modules the Java plugin bundles. The features
          that need the Marketplace plugin live in the optional org.apache.grails.intellij.module.jsp. -->
     <module name="intellij.jsp"/>
     <module name="intellij.jsp.spi"/>
-    <plugin id="com.intellij.javaee.el"/>
     <plugin id="org.intellij.groovy"/>
     <plugin id="com.intellij.properties"/>
-    <plugin id="com.intellij.database"/>
-
-    <plugin id="com.intellij.spring"/>
-    <module name="intellij.spring"/>
-    <module name="intellij.spring.core"/>
-
     <plugin id="org.jetbrains.plugins.gradle"/>
-    <plugin id="com.intellij.modules.ultimate"/>
-    <plugin id="com.intellij.microservices.jvm"/>
     <module name="intellij.properties.backend"/>
     <module name="intellij.properties.backend.psi"/>
     <module name="intellij.regexp"/>
@@ -71,10 +65,15 @@
     <module name="org.apache.grails.intellij.module.hibernate"/>
     <module name="org.apache.grails.intellij.module.langInjection"/>
     <module name="org.apache.grails.intellij.module.coverage"/>
+    <!-- Ultimate-only integrations; each declares the plugins and modules it needs and is skipped on Community Edition -->
+    <module name="org.apache.grails.intellij.module.spring"/>
+    <module name="org.apache.grails.intellij.module.javaee"/>
+    <module name="org.apache.grails.intellij.module.database"/>
   </content>
 
   <depends optional="true" config-file="grails-js-integration.xml">JavaScript</depends>
   <depends optional="true" config-file="grails-css-integration.xml">com.intellij.css</depends>
+  <depends optional="true" config-file="grails-el-integration.xml">com.intellij.javaee.el</depends>
 
   <resource-bundle>messages.GrailsBundle</resource-bundle>
 
@@ -87,6 +86,7 @@
     <extensionPoint name="viewNodeProvider" dynamic="true" interface="org.apache.grails.intellij.plugin.projectView.api.GrailsViewNodeProvider"/>
     <extensionPoint name="gspJsInjectionTag" dynamic="true" beanClass="org.apache.grails.intellij.plugin.addins.js.GspJsInjectionTagBean"/>
     <extensionPoint name="viewFileTypeProvider" dynamic="true" interface="org.apache.grails.intellij.plugin.fileType.GrailsViewFileTypeProvider"/>
+    <extensionPoint name="namedArgumentReferenceContributor" dynamic="true" interface="org.apache.grails.intellij.plugin.references.GrailsMethodNamedArgumentReferenceProvider$Contributor"/>
   </extensionPoints>
 
   <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
@@ -98,8 +98,6 @@
     <commandExecutor implementation="org.apache.grails.intellij.plugin.runner.impl.Grails3GradleCommandExecutor"/>
     <commandExecutor implementation="org.apache.grails.intellij.plugin.runner.impl.GrailsInstallationCommandExecutor"/>
     <commandExecutor implementation="org.apache.grails.intellij.plugin.runner.impl.Grails3InstallationCommandExecutor"/>
-    <facetProvider implementation="org.apache.grails.intellij.plugin.spring.GrailsSpringFacetProvider"/>
-    <facetProvider implementation="org.apache.grails.intellij.plugin.util.GrailsWebFacetProvider"/> <!--j2ee plugin-->
     <applicationProvider id="default" implementation="org.apache.grails.intellij.plugin.structure.impl.PlainGrailsApplicationProvider"/>
     <applicationProvider implementation="org.apache.grails.intellij.plugin.structure.impl.Grails3ApplicationProvider"/>
     <commandProvider implementation="org.apache.grails.intellij.plugin.commands.OldGrailsCommandProvider"/>
@@ -122,7 +120,6 @@
     <membersContributor implementation="org.apache.grails.intellij.plugin.references.domain.criteria.BuildableCriteriaImplicitMemberContributor"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.config.BuildConfigMemberContributor"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.config.ConfigMemberContributor"/>
-    <membersContributor implementation="org.apache.grails.intellij.plugin.spring.GrailsWebApplicationContextMembersContributor"/> <!-- Spring Support -->
     <membersContributor implementation="org.apache.grails.intellij.plugin.tests.GrailsTestMemberContributor"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.references.constraints.GrailsValidationMethodsContributor"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.pluginSupport.seachable.SearchableMemberMethodContributor"/>
@@ -130,11 +127,11 @@
     <membersContributor implementation="org.apache.grails.intellij.plugin.references.domain.criteria.CriteriaClosureMemberContributor"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.references.domain.namedQuery.NamedCriteriaProxyMembersContributor"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.pluginSupport.resources.GrailsResourcesClosureMethodContributor"/>
+    <membersContributor implementation="org.apache.grails.intellij.plugin.spring.GrailsResourcesGroovyMemberContributor"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.references.domain.detachedCriteria.DetachedCriteriaClosureMemberProvider"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.references.domain.detachedCriteria.DetachedCriteriaMemberProvider"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.references.controller.HttpRequestMemberContributor"/>
     <membersContributor implementation="org.apache.grails.intellij.plugin.references.controller.HttpResponseMemberContributor"/>
-    <membersContributor implementation="org.apache.grails.intellij.plugin.spring.GrailsResourcesGroovyMemberContributor"/>
     <astTransformationSupport implementation="org.apache.grails.intellij.plugin.lang.Grails3TraitInjectorContributor"/>
 
     <closureMissingMethodContributor implementation="org.apache.grails.intellij.plugin.pluginSupport.webflow.WebFlowEventDefinitionMethodContributor"/>
@@ -157,7 +154,6 @@
     <referenceTypeEnhancer implementation="org.apache.grails.intellij.plugin.tests.GrailsTestVariableEnhancer"/>
     <referenceTypeEnhancer implementation="org.apache.grails.intellij.plugin.util.PredefinedTypeReferenceEnhancer"/>
     <variableEnhancer implementation="org.apache.grails.intellij.plugin.references.pluginClass.GrailsPluginParameterEnhancer"/>
-    <variableEnhancer implementation="org.apache.grails.intellij.plugin.spring.InjectedSpringBeanProvider"/>
     <variableEnhancer implementation="org.apache.grails.intellij.plugin.references.taglib.TaglibClosureParamEnhancer"/>
     <variableEnhancer implementation="org.apache.grails.intellij.plugin.references.constraints.GrailsValidatorParamTypeEnhancer"/>
 
@@ -315,6 +311,8 @@
     <highlightErrorFilter implementation="org.apache.grails.intellij.plugin.lang.gsp.GspErrorFilter" />
 
     <projectService serviceImplementation="org.apache.grails.intellij.plugin.config.GrailsSettingsService"/>
+    <projectService serviceImplementation="org.apache.grails.intellij.plugin.gradle.GrailsGradleSyncStatus"/>
+    <externalSystemTaskNotificationListener implementation="org.apache.grails.intellij.plugin.gradle.GrailsGradleSyncTaskListener"/>
 
     <projectService serviceImplementation="org.apache.grails.intellij.plugin.lang.gsp.psi.gsp.impl.gtag.GspTagDescriptorService"/>
 
@@ -351,8 +349,6 @@
     <lang.documentationProvider language="GSP" implementationClass="org.apache.grails.intellij.plugin.lang.gsp.GspTagDocumentationProvider"/>
     <lang.documentationProvider language="Groovy" implementationClass="org.apache.grails.intellij.plugin.lang.gsp.GspTagDocumentationProvider"/>
 
-    <database.dataSourceDetector implementation="org.apache.grails.intellij.plugin.database.GrailsDataSourceDetector"/>
-
     <intentionAction>
       <language>Groovy</language>
       <className>org.apache.grails.intellij.plugin.actions.GenerateViewIntention</className>
@@ -377,17 +373,6 @@
       <categoryKey>library.name</categoryKey>
     </intentionAction>
 
-    <!-- Spring Support -->
-    <renamePsiElementProcessor implementation="org.apache.grails.intellij.plugin.spring.GrLightVariableRenameProcessor" id="GrLightVariableRenameProcessor"/>
-    <spring.customModuleComponentsDiscoverer implementation="org.apache.grails.intellij.plugin.spring.GrailsSpringBeanDiscoverer"/>
-
-    <codeInsight.lineMarkerProvider language="Groovy" implementationClass="org.apache.grails.intellij.plugin.spring.SpringInjectionAnnotator"/>
-
-    <completion.contributor language="Groovy" implementationClass="org.apache.grails.intellij.plugin.spring.GrailsInjectedBeanCompletionContributor" order="before groovyBasic"/>
-    <aliasingPsiTargetMapper implementation="org.apache.grails.intellij.plugin.spring.SpringGrailsTargetMapper"/>
-    <aliasingPsiTargetMapper implementation="org.apache.grails.intellij.plugin.spring.GrailsSpringStereotypeAliasingPsiTargetMapper"/>
-    <referencesSearch implementation="org.apache.grails.intellij.plugin.spring.SpringBeanReferenceSearcher"/>
-
     <debugger.positionManagerFactory implementation="org.apache.grails.intellij.plugin.lang.gsp.debug.GspPositionManagerFactory"/>
     <debugger.javaDebugAware implementation="org.apache.grails.intellij.plugin.lang.gsp.debug.GspJavaDebugAware"/>
 
@@ -397,17 +382,18 @@
     <postStartupActivity implementation="org.apache.grails.intellij.plugin.structure.GrailsApplicationManagerRefresher"/>
     <backgroundPostStartupActivity implementation="org.apache.grails.intellij.plugin.structure.sync.GrailsMvcStructureRefresher"/>
     <editorNotificationProvider implementation="org.apache.grails.intellij.plugin.editor.GrailsEditorDecorator"/>
+    <editorNotificationProvider implementation="org.apache.grails.intellij.plugin.editor.GrailsGradleSyncNotificationProvider"/>
     <projectViewPane implementation="org.apache.grails.intellij.plugin.projectView.GrailsProjectViewPane"/>
     <treeStructureProvider implementation="org.apache.grails.intellij.plugin.projectView.GrailsTreeStructureProvider"/>
     <multiHostInjector implementation="org.apache.grails.intellij.plugin.pluginSupport.assetPipeline.AssetScriptInjector"/>
     <psi.referenceContributor language="GSP"
                               implementation="org.apache.grails.intellij.plugin.pluginSupport.assetPipeline.AssetReferenceContributor"/>
-    <semContributor implementation="org.apache.grails.intellij.plugin.spring.GrailsSpringSemContributor"/>
 
     <ignoredFileProvider implementation="org.apache.grails.intellij.plugin.config.GrailsIgnoredProvider"/>
     <notificationGroup id="Grails notifications" displayType="TOOL_WINDOW" toolWindowId="Grails Console" bundle="messages.GrailsBundle" key="notification.group.grails.notifications"/>
     <notificationGroup id="grails" displayType="BALLOON" bundle="messages.GrailsBundle" key="notification.group.grails"/>
     <notificationGroup id="Grails Configure" displayType="BALLOON" key="notification.group.display.name.grails.configure"/>
+    <notificationGroup id="Grails Gradle import" displayType="BALLOON" bundle="messages.GrailsBundle" key="notification.group.grails.gradle.sync"/>
     <postStartupActivity implementation="org.apache.grails.intellij.plugin.mvc.MvcModuleStructureSynchronizer$MyPostStartUpActivity"/>
     <roots.watchedRootsProvider implementation="org.apache.grails.intellij.plugin.mvc.MvcWatchedRootProvider"/>
     <pathMacroContributor implementation="org.apache.grails.intellij.plugin.mvc.MvcPathMacros"/>

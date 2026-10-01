@@ -20,6 +20,11 @@ on:
       - main
   pull_request:
   workflow_dispatch:
+  # Nightly Community Edition checks: loading the plugin on an IdeaIC sandbox is the one thing a
+  # pull-request build cannot verify cheaply (it needs a fresh ~1GB IdeaIC download), and it is
+  # also the first thing an upstream Community binary change breaks. So testIdeCe runs nightly only.
+  schedule:
+    - cron: '0 3 * * *'
 # Queue jobs - cancel in-progress PR runs when new commits are pushed, but allow branch builds to complete
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,6 +32,8 @@ concurrency:
 jobs:
   build:
     name: 'Build & Test'
+    # The scheduled run is reserved for the Community Edition job below.
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: "📥 Checkout repository"
@@ -93,4 +100,41 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: plugin-verifier-report
+          path: plugin/build/reports/pluginVerifier
+  test-ce:
+    name: 'Community Edition Tests'
+    # Nightly, or on demand through "Run workflow": needs the IdeaIC 2026.2 distribution (~1GB),
+    # so pull-request builds skip it. -PplatformEdition=IC runs the Community-safe test set on that
+    # sandbox and points Plugin Verifier at IC, which is what proves the ZIP loads there and that
+    # the main jar reaches for no Ultimate class.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: "📥 Checkout repository"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: "📝 Read JDK version from .sdkmanrc"
+        id: sdkmanrc
+        run: echo "java=$(grep -E '^java=' .sdkmanrc | cut -d= -f2 | sed 's/-librca$//')" >> "$GITHUB_OUTPUT"
+      - name: "☕️ Setup JDK"
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: liberica # .sdkmanrc pins librca = Liberica
+          java-version: ${{ steps.sdkmanrc.outputs.java }}
+      - name: "🐘 Setup Gradle"
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic # see note above
+      - name: "🏗️ Community Edition build, tests & verifier"
+        run: ./gradlew :plugin:testIdeCe verifyPlugin buildPlugin -PplatformEdition=IC
+      - name: "📋 Upload Community test report"
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plugin-test-ce-report
+          path: plugin/build/reports/tests/testIdeCe
+      - name: "📋 Upload Community verifier report"
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plugin-verifier-ce-report
           path: plugin/build/reports/pluginVerifier

@@ -46,7 +46,25 @@ if (!reporting.reports.names.contains('testCodeCoverageReport')) {
     }
 }
 
+// The aggregate has the same class-identity problem as the per-project reports (see
+// org.apache.grails.intellij.build.jacoco): IntelliJ Platform projects run their tests from the
+// sandbox jars built from the instrumented classes, so their coverage only matches when the
+// report analyses build/instrumented/instrumentCode rather than build/classes. Each aggregated
+// project contributes its instrumented output when it has one, its plain classes otherwise.
+def aggregatedClassDirectories = objects.fileCollection()
+configurations.jacocoAggregation.dependencies.withType(ProjectDependency).all { dependency ->
+    def aggregated = project(dependency.path)
+    aggregated.afterEvaluate {
+        def instrumentCode = aggregated.tasks.matching { it.name == 'instrumentCode' }
+        aggregatedClassDirectories.from(aggregated.provider {
+            instrumentCode.isEmpty() ? aggregated.sourceSets.main.output.classesDirs : instrumentCode.collect { it.outputs.files }
+        })
+        aggregatedClassDirectories.builtBy(instrumentCode)
+    }
+}
+
 tasks.named('testCodeCoverageReport') { task ->
+    task.classDirectories.setFrom(aggregatedClassDirectories)
     task.reports.xml.required = true
     task.reports.html.required = true
     task.reports.csv.required = false

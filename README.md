@@ -5,6 +5,9 @@ GSP language support (parsing, highlighting, completion, refactoring), Grails pr
 structure and navigation, run configurations, taglib/domain-class support, and
 integrations for i18n, coverage, Hibernate, Maven, and language injection.
 
+The plugin runs on IntelliJ IDEA Ultimate and, with a reduced feature set, on IntelliJ IDEA
+Community Edition 2026.2+ (see [CE-SUPPORT.md](CE-SUPPORT.md)).
+
 This codebase was originally developed by JetBrains s.r.o. and donated to the Apache
 Software Foundation under a software grant. It was imported from the `grails` directory of
 [JetBrains/intellij-obsolete-plugins](https://github.com/JetBrains/intellij-obsolete-plugins)

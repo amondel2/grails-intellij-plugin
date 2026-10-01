@@ -23,6 +23,10 @@ plugins {
 dependencies {
     intellijPlatform {
         bundledPlugin 'com.intellij.hibernate'
+        bundledPlugin 'com.intellij.persistence' // GORM persistence bridge (persistent/*)
+        bundledPlugin 'com.intellij.javaee.jpa'
+        bundledPlugin 'com.intellij.java' // JAM model classes (CommonModelElement)
+        bundledPlugin 'org.intellij.groovy' // domain classes are Groovy PSI
     }
 
     compileOnly project(':plugin')

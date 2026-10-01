@@ -23,7 +23,7 @@ limitations under the License.
 ## Quick Reference
 
 ```bash
-# Compile and run all tests (~3.5 min, ~970 tests)
+# Compile and run all tests (~5 min, ~1100 tests)
 ./gradlew test
 
 # Single test class / single test method
@@ -41,6 +41,11 @@ limitations under the License.
 
 # Plugin Verifier against specific builds (e.g. the next EAP) instead of the recommended set
 ./gradlew verifyPlugin -PpluginVerifierIdes=IU-263.3889.65
+
+# Community Edition: verifier, test suite and sandbox IDE on IdeaIC (downloads ~1GB once)
+./gradlew verifyPlugin -PplatformEdition=IC
+./gradlew :plugin:testIdeCe -PplatformEdition=IC
+./gradlew :plugin:runIdeCe -PplatformEdition=IC
 ```
 
 ## Critical Rules
@@ -83,6 +88,14 @@ limitations under the License.
 9. **Remove debug probes before committing** (see Debugging below).
 10. **Retry transient commit failures.** Git commits can fail with
     `1Password: failed to fill whole buffer` (signing) — just retry.
+11. **The main jar must stay Community-loadable.** `plugin/src/main` compiles against the
+    Community Edition API only; anything that needs an Ultimate plugin (Spring, Java EE,
+    Database Tools, Hibernate/JPA) goes into a content module under `pluginModules/` whose
+    descriptor names every plugin *and* content module it uses (a plugin id alone does not
+    expose that plugin's content modules). The test suite runs on a flat classpath and the
+    Ultimate verifier follows content-module dependencies, so neither catches a missing module
+    dependency; `./gradlew verifyPlugin -PplatformEdition=IC` and `runIde` do. Tag tests that
+    need Ultimate plugins with `@Category(UltimateOnlyTest.class)`. See `CE-SUPPORT.md`.
 
 ## Technology Stack
 
@@ -105,8 +118,8 @@ is a pure aggregator — it owns only RAT and coverage aggregation, no sources.
 
 | Path | Gradle project | Description |
 |------|----------------|-------------|
-| `plugin/` | `:plugin` | Main plugin: GSP language, Grails project support, run configs |
-| `pluginModules/{copyright,coverage,hibernate,i18n,jsp,langInjection,maven}/` | `:pluginModules-*` | Optional IntelliJ content modules (`pluginModule` deps) |
+| `plugin/` | `:plugin` | Main plugin: GSP language, Grails project support, run configs. Compiles against the Community Edition API only |
+| `pluginModules/{copyright,coverage,database,hibernate,i18n,javaee,jsp,langInjection,maven,spring}/` | `:pluginModules-*` | Optional IntelliJ content modules (`pluginModule` deps). `spring`, `javaee`, `database` and `hibernate` hold the Ultimate-only integrations and are skipped on Community Edition |
 | `libs/gradle-tooling/` | `:libs-gradle-tooling` | Gradle tooling API model builders |
 | `libs/grails-rt/` | `:libs-grails-rt` | Runtime injected into user apps (Java 8) |
 | `libs/testFramework/` | `:libs-testFramework` | Shared test infrastructure (`GrailsTestCase`, `GroovyProjectDescriptors`, `TestLibrary`) |
@@ -133,15 +146,16 @@ Special packaging: `plugin/standardDsls/` sits outside the resource roots and is
 
 ## Running & Debugging Tests
 
-- Full suite: `./gradlew test` — ~4 min, 987 tests across 186 classes.
+- Full suite: `./gradlew test` — ~5 min, 1098 tests across 210 classes.
 - Failure details live in `plugin/build/test-results/test/TEST-<fqcn>.xml`; the `<system-out>`
   CDATA holds logged output. The giant module-list line and
   `InstanceNotOverridable`/SLF4J warnings are noise — ignore them.
 - **Probe technique** that works well here: add `System.out.println("### TAG ...")`
   probes in `src/`, run one test, grep the result XML for `### TAG`. Remove probes
   before committing.
-- Some tests can use IDE sources via `test.idea.home.path` in `gradle.properties`
-  (points at a local intellij-community checkout; unset/nonexistent on CI is fine).
+- Some tests can use IDE sources via `-Ptest.idea.home.path=<path>`, passed on the command
+  line (points at a local intellij-community checkout). It is not set in the committed
+  `gradle.properties`, and is silently ignored when the path does not exist.
 - Base classes: extend `GrailsTestCase` (in `testFramework`) for light-fixture tests;
   it handles the project descriptor and JDK. See Critical Rule 5 before touching
   fixture/JDK setup.
@@ -166,6 +180,13 @@ Special packaging: `plugin/standardDsls/` sits outside the resource roots and is
 - The legacy plugin id `org.intellij.grails` is grandfathered on Marketplace and
   permanent for the existing listing (see `IMPROVEMENT-PLAN.md`); the `TemplateWordInPluginId` check is muted
   deliberately.
+- **Coverage needs two non-default JaCoCo settings** (both in the `jacoco` and
+  `coverage-aggregation` convention plugins): the tests load the plugin from the sandbox jars,
+  which are built from the *instrumented* classes, so reports must analyse
+  `build/instrumented/instrumentCode` rather than `build/classes`; and IntelliJ's plugin class
+  loaders define classes without a code-source location, so the agent needs
+  `includeNoLocationClasses = true` or the exec file contains only Gradle worker classes. Either
+  one missing shows up as 0% for every class, not as an error.
 
 ## Pull Request Guidelines
 
@@ -189,6 +210,7 @@ Special packaging: `plugin/standardDsls/` sits outside the resource roots and is
 | Commit fails with `1Password: failed to fill whole buffer` | Transient signing hiccup — retry the commit |
 | Wrong JDK / build fails to configure | `sdk env` (JDK pinned in `.sdkmanrc`, no toolchain) |
 | RAT failure on a new file | Add the Apache license header; excludes need a justification |
+| A feature "missing" after switching plugin builds | Rebuild before judging — hit the Gradle refresh icon (or `./gradlew buildPlugin`) so the sandbox picks up the new classes. A stale build can make working code look broken, and the Grails project view pane is the usual tell because it is only added once an application is detected |
 
 ## Resources
 

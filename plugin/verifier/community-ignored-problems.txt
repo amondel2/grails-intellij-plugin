@@ -1,0 +1,35 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+# Plugin Verifier problems that are EXPECTED when verifying against IntelliJ IDEA Community
+# Edition (./gradlew verifyPlugin -PplatformEdition=IC). One regular expression per line, matched
+# against the problem description; the build prefixes each with the plugin id and version.
+#
+# Everything listed here is a main-jar reference to a plugin that Community Edition does not
+# bundle and that is reached only behind a class-presence guard (GrailsIntegrationUtil), so it is
+# never executed there. Anything else the Community run reports is a real defect: an Ultimate
+# API used from the main jar belongs in a content module under pluginModules/ instead.
+#
+# JavaScript plugin: embedded-JS formatting blocks, injection and PSI helpers
+# (GspBlockGenerator, GspFormattingHelper, GspFileImpl, JavaScriptIntegrationUtil).
+.*com\.intellij\.lang\.javascript.*
+# CSS plugin: GspCssInjector and the CSS hooks in the GSP formatter (CssIntegrationUtil).
+.*com\.intellij\.psi\.css.*
+.*com\.intellij\.lang\.css.*
+# Graph API of the Ultimate platform: the domain-class diagram (perspectives/*), whose editor
+# provider refuses to open on Community Edition.
+.*com\.intellij\.openapi\.graph.*

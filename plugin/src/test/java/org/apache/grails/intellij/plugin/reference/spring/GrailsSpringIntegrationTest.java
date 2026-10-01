@@ -30,6 +30,8 @@ import com.intellij.spring.facet.SpringFacet;
 import com.intellij.spring.model.utils.SpringCommonUtils;
 import com.intellij.testFramework.builders.JavaModuleFixtureBuilder;
 import com.intellij.util.containers.ContainerUtil;
+import org.junit.experimental.categories.Category;
+import org.apache.grails.intellij.lib.testFramework.UltimateOnlyTest;
 import org.apache.grails.intellij.plugin.fileType.GspFileType;
 import org.jetbrains.plugins.groovy.GroovyLanguage;
 import org.apache.grails.intellij.lib.testFramework.GrailsTestUtil;
@@ -38,6 +40,11 @@ import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.literals
 
 import java.util.List;
 
+/**
+ * Spring Support integration, provided by the optional org.apache.grails.intellij.module.spring content
+ * module: Ultimate-only, excluded from the Community Edition test run.
+ */
+@Category(UltimateOnlyTest.class)
 public class GrailsSpringIntegrationTest extends HddGrailsTestCase {
   public void testGetBeanCompletion() {
     assertNotNull(SpringFacet.getInstance(getModule()));
@@ -167,7 +174,7 @@ public class GrailsSpringIntegrationTest extends HddGrailsTestCase {
   /**
    * Contributing references to the literal makes IntelliLang resolve the enclosing call to look for an injected
    * language, which in turn asks for the type of the {@code myService} argument. That reaches
-   * {@link org.apache.grails.intellij.plugin.spring.InjectedSpringBeanProvider}, where the platform forbids expensive
+   * {@link org.apache.grails.intellij.module.spring.InjectedSpringBeanProvider}, where the platform forbids expensive
    * computations. See <a href="https://github.com/apache/grails-intellij-plugin/issues/16">issue 16</a>.
    */
   public void testInjectedBeanTypeDuringReferenceContribution() {

@@ -26,6 +26,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import org.jetbrains.annotations.NotNull;
 import org.apache.grails.intellij.plugin.projectView.GrailsPluginsNode;
+import org.apache.grails.intellij.plugin.projectView.nodes.GrailsGradleSyncProblemNode;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsApplicationNode;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsArtefactHandlerNode;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsPsiDirectoryNode;
@@ -44,6 +45,9 @@ public final class GrailsNodeComparator implements Comparator<NodeDescriptor<?>>
 
   @Override
   public int compare(NodeDescriptor<?> left, NodeDescriptor<?> right) {
+    // a Grails app the Gradle import could not deliver is the first thing to see in the pane
+    if (left instanceof GrailsGradleSyncProblemNode && !(right instanceof GrailsGradleSyncProblemNode)) return -1;
+    if (right instanceof GrailsGradleSyncProblemNode && !(left instanceof GrailsGradleSyncProblemNode)) return 1;
     if (right instanceof OldGrailsPluginsNode || right instanceof GrailsPluginsNode) return -1;
     if (left instanceof OldGrailsPluginsNode || left instanceof GrailsPluginsNode) return 1;
 

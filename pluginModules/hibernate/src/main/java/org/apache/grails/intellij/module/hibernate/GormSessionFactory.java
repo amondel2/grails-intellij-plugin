@@ -36,7 +36,7 @@ import com.intellij.util.xml.GenericValue;
 import com.intellij.util.xml.ReadOnlyGenericValue;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.apache.grails.intellij.plugin.references.domain.persistent.GormPersistenceMapping;
+import org.apache.grails.intellij.module.hibernate.persistent.GormPersistenceMapping;
 import org.apache.grails.intellij.plugin.mvc.MvcModuleStructureSynchronizer;
 
 import java.util.Collection;
