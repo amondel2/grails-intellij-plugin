@@ -164,14 +164,22 @@ intellijPlatform {
     }
 }
 
-// publishPlugin conventions archiveFile from signPlugin's output, i.e. a fresh local build.
+// publishPlugin conventions archiveFiles from signPlugin's output, i.e. a fresh local build.
 // The release pipeline instead uploads the promoted artifact from dist.apache.org, so that what
 // lands on the Marketplace is byte-for-byte what the PMC voted on. -PpublishArchive=<path> points
 // the task at that ZIP; note publishPlugin also hard-wires dependsOn(buildPlugin, signPlugin) at
-// registration, so the release workflow has to pass -x for both as well. Absent the property the
-// provider is empty and the signPlugin convention still applies, so a manual publish is unchanged.
+// registration, so the release workflow has to pass -x for both as well.
+//
+// archiveFiles is a ConfigurableFileCollection (IPGP 2.19 replaced the RegularFileProperty
+// archiveFile when it added native plugin variants), and IPGP adds the signPlugin/buildPlugin
+// output with from(), not as a convention. The override therefore has to replace the contents with
+// setFrom(), and only when the property is present -- an absent property leaves the collection
+// untouched, so a manual publish is unchanged.
 tasks.named('publishPlugin') { task ->
-    task.archiveFile = layout.file(providers.gradleProperty('publishArchive').map { new File(it) })
+    def publishArchive = providers.gradleProperty('publishArchive').map { new File(it) }
+    if (publishArchive.isPresent()) {
+        task.archiveFiles.setFrom(publishArchive)
+    }
 }
 
 // The composed jar is what ships in lib/; its base name is conventioned from project.name and

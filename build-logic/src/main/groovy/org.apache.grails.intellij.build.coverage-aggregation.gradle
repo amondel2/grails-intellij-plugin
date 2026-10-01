@@ -17,7 +17,9 @@
  * under the License.
  */
 
+import org.gradle.api.attributes.LibraryElements
 import org.gradle.testing.jacoco.plugins.JacocoCoverageReport
+import org.jetbrains.intellij.platform.gradle.attributes.ComposedJarRule
 
 // Cross-project JaCoCo aggregation, applied to the root project so the report path that CI
 // uploads (build/reports/jacoco/testCodeCoverageReport/testCodeCoverageReport.xml) is unchanged
@@ -33,6 +35,18 @@ import org.gradle.testing.jacoco.plugins.JacocoCoverageReport
 
 plugins {
     id 'jacoco-report-aggregation'
+}
+
+// Since IPGP 2.19 the module plugin tags every project dependency of an IntelliJ Platform project
+// with libraryelements=composed-jar (instead of forcing it on the whole classpath), and makes that
+// request compatible with a plain jar through its ComposedJarRule -- but only in the attribute
+// schema of the projects it is applied to. This root project applies no IPGP plugin, yet its
+// aggregation resolves straight through :plugin to the plain library projects it depends on.
+// Without the rule here, composed-jar matches none of their variants and Gradle reports a capability
+// conflict ("Cannot select module because of conflict with project ... Both provide capability")
+// for every one of them. Registering the same rule on the root schema restores the compatibility.
+dependencies.attributesSchema.attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE) {
+    compatibilityRules.add(ComposedJarRule)
 }
 
 // Registered only when it does not already exist. jacoco-report-aggregation auto-registers

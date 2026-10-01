@@ -368,7 +368,7 @@ Marketplace is byte-for-byte what the PMC voted on.
   -x buildPlugin -x signPlugin
 ```
 
-`-PpublishArchive` overrides `publishPlugin.archiveFile`, which otherwise points at a fresh
+`-PpublishArchive` overrides `publishPlugin.archiveFiles`, which otherwise points at a fresh
 `signPlugin` output. The two `-x` flags are required because `publishPlugin` hard-wires
 `dependsOn(buildPlugin, signPlugin)` when it is registered — without them the plugin is
 rebuilt and re-signed even though the uploaded file is the downloaded one. Omit all three
