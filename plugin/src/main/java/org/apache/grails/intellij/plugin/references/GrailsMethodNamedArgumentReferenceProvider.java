@@ -40,6 +40,7 @@ import org.apache.grails.intellij.plugin.references.domain.criteria.CriteriaProp
 import org.apache.grails.intellij.plugin.references.domain.detachedCriteria.DetachedCriteriaReferenceProvider;
 import org.apache.grails.intellij.plugin.references.tagSupport.GspTagSupportGspReferenceProvider;
 import org.apache.grails.intellij.plugin.references.tagSupport.TagAttributeReferenceProvider;
+import org.apache.grails.intellij.plugin.util.ControlFlowGuard;
 import org.jetbrains.plugins.groovy.lang.psi.api.GroovyResolveResult;
 import org.jetbrains.plugins.groovy.lang.psi.api.auxiliary.GrListOrMap;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.arguments.GrArgumentList;
@@ -259,6 +260,9 @@ public final class GrailsMethodNamedArgumentReferenceProvider extends PsiReferen
           myInstance = myClass.getDeclaredConstructor().newInstance();
         }
         catch (Exception e) {
+          // A cancellation thrown by the constructor arrives inside an InvocationTargetException,
+          // so the cause has to be checked too, and it must not be wrapped.
+          ControlFlowGuard.rethrowIfWrappedControlFlow(e);
           throw new RuntimeException(e);
         }
       }
