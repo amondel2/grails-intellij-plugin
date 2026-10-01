@@ -12,9 +12,12 @@ https://github.com/${REPO_SLUG}/releases/tag/${TAG}
 For the complete list of changes:
 https://github.com/${REPO_SLUG}/compare/v<PREVIOUS_VERSION>...${TAG}
 
-The plugin can be installed from inside IntelliJ IDEA Ultimate via
-Settings > Plugins > Marketplace, or from the JetBrains Marketplace:
-https://plugins.jetbrains.com/plugin/org.intellij.grails
+Download Links: https://grails.apache.org/download.html
+
+The plugin can be installed inside IntelliJ IDEA Ultimate via one of the following options:
+1. Settings > Plugins > Marketplace
+2. Visiting the JetBrains Marketplace: https://plugins.jetbrains.com/plugin/18504-apache-grails
+3. Settings > Plugins & choosing "Install Plugin from Disk"
 
 Apache Grails website: https://grails.apache.org/
 

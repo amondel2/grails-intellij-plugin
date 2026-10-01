@@ -17,6 +17,7 @@
  * under the License.
  */
 import org.jetbrains.intellij.platform.gradle.Constants
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 // Deliberately no allprojects/subprojects block: every project applies its own convention
@@ -27,22 +28,19 @@ plugins {
 
 dependencies {
     intellijPlatform {
-        bundledPlugin 'com.intellij.javaee'
-        bundledPlugin 'com.intellij.javaee.el' // no longer transitive in 2026.2
-        bundledPlugin 'com.intellij.persistence'
-        bundledPlugin 'com.intellij.javaee.jpa'
+        // The main jar compiles against the Community Edition API only, so a reference to an
+        // Ultimate plugin fails at compile time instead of at IDE runtime. Ultimate integrations
+        // (Spring, Java EE, Database Tools, Hibernate/JPA) compile in their content modules under
+        // pluginModules/, each of which declares its own bundled plugins.
         // JspManager and TldDescriptor ship in modules of the Java plugin; the com.intellij.jsp
         // Marketplace plugin is needed only by :pluginModules-jsp, which loads when it is present.
         bundledModule 'intellij.jsp'
         bundledModule 'intellij.jsp.spi'
-        bundledPlugin 'com.intellij.javaee.web'
         bundledPlugin 'org.intellij.groovy'
-        bundledPlugin 'com.intellij.database'
-        bundledPlugin 'com.intellij.spring'
         bundledPlugin 'com.intellij.gradle' // split out of org.jetbrains.plugins.gradle in 2026.2
         bundledPlugin 'org.jetbrains.plugins.gradle'
-        bundledPlugin 'com.intellij.modules.ultimate'
-        bundledPlugin 'com.intellij.microservices.jvm'
+        // JavaScript and CSS are the two Ultimate plugins the main jar still references directly,
+        // behind class-presence guards (GrailsIntegrationUtil) and <depends optional="true">.
         bundledPlugin 'JavaScript'
         bundledPlugin 'com.intellij.css'
 
@@ -50,14 +48,24 @@ dependencies {
         // owner chain to Project.project(String) and returns a Project, not a Dependency.
         pluginModule project(path: ':pluginModules-copyright')
         pluginModule project(path: ':pluginModules-coverage')
+        pluginModule project(path: ':pluginModules-database')
         pluginModule project(path: ':pluginModules-hibernate')
         pluginModule project(path: ':pluginModules-i18n')
+        pluginModule project(path: ':pluginModules-javaee')
         pluginModule project(path: ':pluginModules-jsp')
         pluginModule project(path: ':pluginModules-langInjection')
         pluginModule project(path: ':pluginModules-maven')
+        pluginModule project(path: ':pluginModules-spring')
 
-        // additional plugins required for testing
+        // additional plugins required for testing. The Ultimate ones are test-only: the Ultimate
+        // test classes (tagged UltimateOnlyTest) drive the content modules and assert against
+        // the Spring, Java EE and persistence APIs directly.
         testBundledPlugin 'com.intellij.hibernate'
+        testBundledPlugin 'com.intellij.persistence'
+        testBundledPlugin 'com.intellij.javaee.jpa'
+        testBundledPlugin 'com.intellij.javaee'
+        testBundledPlugin 'com.intellij.javaee.web' // GrailsMavenImporterTest web-facet assertions
+        testBundledPlugin 'com.intellij.spring' // GrailsSpringIntegrationTest, JamInGroovyTest
         testBundledPlugin 'HtmlTools'
         testBundledPlugin 'org.jetbrains.idea.maven'
         testBundledPlugin 'com.intellij.copyright' // GspCopyrightUpdaterTest
@@ -188,6 +196,85 @@ def fixtureJarTasks = fixtureLibraries.collect { String directory, Map<String, S
             if (!missing.isEmpty()) {
                 throw new GradleException(
                         "Test fixture jars missing from $destination after sync: ${missing.join(', ')}")
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Community Edition targets
+//
+// The plugin ZIP is built once and stays a single artifact; Community Edition is supported at
+// runtime because every Ultimate integration is a content module that is skipped when its plugins
+// are absent (see CE-SUPPORT.md). These named targets exercise that on a real IdeaIC sandbox.
+// Nobody downloads a Community distribution at configuration time: the GitHub Actions nightly
+// job invokes them explicitly with -PplatformEdition=IC.
+// ---------------------------------------------------------------------------------------------
+intellijPlatformTesting {
+    // Registered only behind -PplatformEdition=IC. The IC checks belong to the opt-in Community
+    // targets, not to the default build: keeping them conditional keeps `./gradlew test`,
+    // `verifyPlugin` and `./gradlew runIde` from ever touching an IdeaIC download or the
+    // jacoco-report graph.
+    if (providers.gradleProperty('platformEdition').getOrElse('IU') == 'IC') {
+
+        // Community Edition tests. The same compiled test set runs on an IdeaIC sandbox, minus the
+        // tests that can only load when the Ultimate plugins they import are present.
+        testIde {
+            testIdeCe {
+                type.set(IntelliJPlatformType.IntellijIdeaCommunity)
+                version.set(providers.gradleProperty('platformVersion'))
+                // See intellij-plugin.gradle pluginVerification.ides: the standalone IC distribution
+                // is no longer published for 2025.3+, so resolve the published ideaIC Maven artifact.
+                useInstaller.set(false)
+                // The Maven and externalSystem integration test frameworks let the heavy importer
+                // tests (GrailsMavenImporterTest, GradleGrailsImportingTest) at least load on the
+                // Community sandbox; both are nevertheless excluded from execution below.
+                testFramework(TestFrameworkType.Plugin.Maven.INSTANCE)
+                testFramework(TestFrameworkType.Plugin.ExternalSystem.INSTANCE)
+                plugins {
+                    bundledPlugins(
+                            'org.intellij.groovy',
+                            'com.intellij.properties',
+                            'com.intellij.gradle',
+                            'org.jetbrains.plugins.gradle',
+                            'com.intellij.copyright', // GspCopyrightUpdaterTest
+                            'HtmlTools',              // GSP HTML completion fixtures
+                    )
+                }
+                task {
+                    // Fixture startup on the CE sandbox loads more classes than the 2g worker
+                    // default before running out of heap midway through the suite.
+                    maxHeapSize = '4g'
+                    // Ultimate-only tests are tagged with this JUnit category (see
+                    // libs/testFramework/org/apache/grails/intellij/lib/testFramework/UltimateOnlyTest.java)
+                    // and their imports would fail class loading on a sandbox without the Ultimate
+                    // plugins, so the Community run excludes them wholesale. The Community IDE itself
+                    // bundles no css-plugin and no JavaScript plugin in 2026.2+, which also affects
+                    // which bundledPlugins entries above are legal: keep the list to what the
+                    // ideaIC-2026.2 distribution actually contains (verified from its plugins/ dir).
+                    useJUnit {
+                        excludeCategories 'org.apache.grails.intellij.lib.testFramework.UltimateOnlyTest'
+                    }
+                }
+            }
+        }
+
+        // A Community Edition sandbox for manual smoke checks (/c/g or the DevKit "Run" entry).
+        runIde {
+            runIdeCe {
+                type.set(IntelliJPlatformType.IntellijIdeaCommunity)
+                version.set(providers.gradleProperty('platformVersion'))
+                useInstaller.set(false)
+                plugins {
+                    // Only what the ideaIC distribution actually contains: it bundles neither the
+                    // CSS nor the JavaScript plugin.
+                    bundledPlugins(
+                            'org.intellij.groovy',
+                            'com.intellij.properties',
+                            'com.intellij.gradle',
+                            'org.jetbrains.plugins.gradle',
+                    )
+                }
             }
         }
     }

@@ -394,7 +394,7 @@ jobs:
           echo "::group::Manual ASF Reporter Update"
           TODAY=$(date +"%Y-%m-%d")
           echo "Update https://reporter.apache.org/addrelease.html?${SVN_PROJECT} to add"
-          echo "${SVN_FOLDER}-${VERSION} as complete as of ${TODAY}"
+          echo "${SVN_FOLDER^^}-${VERSION} as complete as of ${TODAY}"
           echo "::endgroup::"
       - name: "🛠️ Install tools"
         run: sudo apt-get install -y gettext-base # gettext-base provides envsubst for the announcement email
@@ -418,8 +418,18 @@ jobs:
           echo "opened a PR against ${TARGET_BRANCH}. Resolve any conflicts and merge it, so neither"
           echo "the bump nor the tagged commit is left orphaned."
           echo "::endgroup::"
-      # Last step in the pipeline: announce only once the release is public and the
-      # repository is back on a snapshot version.
+      # Before the announcement, so the download page it links to already lists this release.
+      - name: "🌎 MANUAL - Add version to the Grails Website"
+        run: |
+          echo "::group::Add version to the Grails Website - MANUAL"
+          echo "Add the released version [${VERSION}] to the Grails Website download page by running the Release Tool workflow"
+          echo "with artifact_id [${DIST_NAME#apache-}] and artifact_version [${VERSION}]:"
+          echo "https://github.com/apache/grails-static-website/actions/workflows/release-tool.yml"
+          echo "Republish Grails Website by running the Publish workflow:"
+          echo "https://github.com/apache/grails-static-website/actions/workflows/publish.yml"
+          echo "::endgroup::"
+      # Last step in the pipeline: announce only once the release is public, listed on the
+      # website, and the repository is back on a snapshot version.
       - name: "📧 MANUAL - Send Announcement Email"
         run: |
           echo "::group::Announcement Email"

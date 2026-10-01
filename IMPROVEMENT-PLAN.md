@@ -370,21 +370,23 @@ the construction step of the new plugin, immediately after the compliance fork:
 `com.intellij.modules.ultimate` + javaee/jsp/spring/database deps make the plugin
 invisible to IntelliJ Community users. Using the Phase 0.3 reference counts:
 
-- [ ] Restructure `plugin.xml` so the core loads on Community: GSP language + editing,
+- [x] Restructure `plugin.xml` so the core loads on Community: GSP language + editing,
       artefact recognition/navigation, GORM completion, run configs, project view,
-      forge wizard.
-- [ ] Move to `<depends optional="true" config-file=…>` modules: Spring bean
-      integration (`com.intellij.spring`), JPA/persistence + the `hibernate/`
-      submodule (`com.intellij.persistence`, `com.intellij.javaee.jpa`), database
-      integration (`com.intellij.database`), JSP-adjacent GSP features
-      (`com.intellij.jsp`), JS/CSS injection (already optional).
-- [ ] The existing module layout (`pluginModules/hibernate/`, `pluginModules/langInjection/`,
-      `pluginModules/i18n/`, …) is
-      most of the needed seam — the work is breaking compile-time references from
-      core packages into Ultimate-only APIs (count known from Phase 0.3).
-- [ ] Decide the Marketplace story: one artifact with optional deps (recommended)
-      vs. core+addon pair. Default to one artifact unless the audit shows an
-      irreducible Ultimate core.
+      forge wizard. Done: the hard dependencies are Community-only and the main jar
+      compiles against the Community API (see `CE-SUPPORT.md`).
+- [x] ~~Move to `<depends optional="true" config-file=…>` modules~~ — done as content
+      modules instead, because an optional `<depends>` can only name a plugin id and the
+      Ultimate plugins keep their classes in content modules: `pluginModules/spring`
+      (`com.intellij.spring` + `intellij.spring`), `pluginModules/hibernate` (now also
+      `com.intellij.persistence`, `com.intellij.javaee.jpa`), `pluginModules/database`
+      (`com.intellij.database` + `intellij.database`), `pluginModules/javaee` (web facet),
+      `pluginModules/jsp` (`com.intellij.jsp`). JS/CSS/EL stay optional `<depends>` behind
+      class-presence guards.
+- [x] The existing module layout was the seam; the compile-time references from core
+      packages into Ultimate-only APIs are gone except the guarded JavaScript/CSS/graph
+      usages listed in `plugin/verifier/community-ignored-problems.txt`.
+- [x] Marketplace story: one artifact. `./gradlew verifyPlugin -PplatformEdition=IC` and the
+      nightly `testIdeCe` job keep it loadable on Community Edition.
 
 ---
 

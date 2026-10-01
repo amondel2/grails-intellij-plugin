@@ -30,7 +30,7 @@ include 'plugin'
 
 // Project names carry their subpath so every project path is unique and readable, and so
 // IPGP's path-derived defaults never see a nested path. Directories are remapped below.
-['copyright', 'coverage', 'hibernate', 'i18n', 'jsp', 'langInjection', 'maven'].each { name ->
+['copyright', 'coverage', 'database', 'hibernate', 'i18n', 'javaee', 'jsp', 'langInjection', 'maven', 'spring'].each { name ->
     include "pluginModules-$name"
     project(":pluginModules-$name").projectDir = file("pluginModules/$name")
 }

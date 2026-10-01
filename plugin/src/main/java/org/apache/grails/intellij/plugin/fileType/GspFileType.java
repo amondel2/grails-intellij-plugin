@@ -26,7 +26,6 @@ import com.intellij.lexer.Lexer;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.tree.IElementType;
-import com.intellij.ultimate.PluginVerifier;
 import com.intellij.xml.util.XmlUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -49,9 +48,6 @@ public final class GspFileType extends XmlLikeFileType implements GroovyEnabledF
   public static final String GSP_EXTENSION = "gsp";
   public static final GspFileType GSP_FILE_TYPE = new GspFileType();
 
-  static {
-    PluginVerifier.verifyUltimatePlugin();
-  }
 
   private GspFileType() {
     super(GspLanguage.INSTANCE);

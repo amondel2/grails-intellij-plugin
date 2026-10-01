@@ -19,6 +19,7 @@
 
 package org.apache.grails.intellij.plugin.references;
 
+import com.intellij.openapi.extensions.ExtensionPointName;
 import com.intellij.openapi.util.Condition;
 import com.intellij.openapi.util.Pair;
 import com.intellij.psi.PsiClass;
@@ -39,7 +40,7 @@ import org.apache.grails.intellij.plugin.references.domain.criteria.CriteriaProp
 import org.apache.grails.intellij.plugin.references.domain.detachedCriteria.DetachedCriteriaReferenceProvider;
 import org.apache.grails.intellij.plugin.references.tagSupport.GspTagSupportGspReferenceProvider;
 import org.apache.grails.intellij.plugin.references.tagSupport.TagAttributeReferenceProvider;
-import org.apache.grails.intellij.plugin.spring.GrailsSpringMethodReferenceProvider;
+import org.apache.grails.intellij.plugin.util.ControlFlowGuard;
 import org.jetbrains.plugins.groovy.lang.psi.api.GroovyResolveResult;
 import org.jetbrains.plugins.groovy.lang.psi.api.auxiliary.GrListOrMap;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.arguments.GrArgumentList;
@@ -59,7 +60,16 @@ import java.util.Map;
 
 public final class GrailsMethodNamedArgumentReferenceProvider extends PsiReferenceProvider {
 
+  /**
+   * Contributors registered by optional content modules (the Spring Support integration registers its
+   * bean-name references here). Registered lazily, so the instance is rebuilt whenever the set of loaded
+   * modules changes.
+   */
+  public static final ExtensionPointName<Contributor> EP_NAME =
+    ExtensionPointName.create("org.intellij.grails.namedArgumentReferenceContributor");
+
   public static volatile GrailsMethodNamedArgumentReferenceProvider instance;
+  private static volatile boolean epListenerInstalled;
 
   private final Map<Object, Map<String, List<Pair<Contributor.Provider, Condition<PsiMethod>>>>> MAP =
     new HashMap<>();
@@ -76,7 +86,6 @@ public final class GrailsMethodNamedArgumentReferenceProvider extends PsiReferen
       new GormNamedArgumentReferenceProvider().register(res);
       new DetachedCriteriaReferenceProvider().register(res);
       new CriteriaPropertyReferenceProvider().register(res);
-      new GrailsSpringMethodReferenceProvider().register(res);
       new GrailsPluginWebHelpReferenceProvider().register(res);
 
       Condition<PsiMethod> condition = new Contributor.LightMethodCondition(TagLibNamespaceDescriptor.GSP_TAG_METHOD_MARKER);
@@ -86,6 +95,14 @@ public final class GrailsMethodNamedArgumentReferenceProvider extends PsiReferen
       }
 
       res.register(0, WebFlowStateNameReferenceProvider.class, new Contributor.ClassNameCondition("org.codehaus.groovy.grails.webflow.engine.builder.TransitionTo"), "to");
+
+      for (Contributor contributor : EP_NAME.getExtensionList()) {
+        contributor.register(res);
+      }
+      if (!epListenerInstalled) {
+        epListenerInstalled = true;
+        EP_NAME.getPoint().addChangeListener(() -> instance = null, null);
+      }
 
       instance = res;
     }
@@ -243,6 +260,9 @@ public final class GrailsMethodNamedArgumentReferenceProvider extends PsiReferen
           myInstance = myClass.getDeclaredConstructor().newInstance();
         }
         catch (Exception e) {
+          // A cancellation thrown by the constructor arrives inside an InvocationTargetException,
+          // so the cause has to be checked too, and it must not be wrapped.
+          ControlFlowGuard.rethrowIfWrappedControlFlow(e);
           throw new RuntimeException(e);
         }
       }

@@ -19,7 +19,6 @@
 
 package org.apache.grails.intellij.plugin.pluginSupport.spock;
 
-import com.intellij.javaee.web.WebCommonClassNames;
 import com.intellij.psi.CommonClassNames;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiClass;
@@ -47,9 +46,9 @@ final class GrailsSpockEnhancer extends GrReferenceTypeEnhancer {
         "getRedirectArgs", CommonClassNames.JAVA_UTIL_MAP,
         "getChainArgs", CommonClassNames.JAVA_UTIL_MAP,
         "webRequest", "org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest",
-        "getMockRequest", WebCommonClassNames.JAVAX_HTTP_SERVLET_REQUEST,
-        "getMockResponse", WebCommonClassNames.JAVAX_HTTP_SERVLET_RESPONSE,
-        "getMockSession", WebCommonClassNames.JAVAX_HTTP_SESSION,
+        "getMockRequest", "javax.servlet.http.HttpServletRequest",
+        "getMockResponse", "javax.servlet.http.HttpServletResponse",
+        "getMockSession", "javax.servlet.http.HttpSession",
         "getRenderArgs", CommonClassNames.JAVA_UTIL_MAP,
         "getMockParams", "org.codehaus.groovy.grails.web.servlet.mvc.GrailsParameterMap",
         "getMockFlash", "org.codehaus.groovy.grails.web.servlet.FlashScope"

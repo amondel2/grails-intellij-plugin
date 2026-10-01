@@ -16,10 +16,22 @@
   specific language governing permissions and limitations
   under the License.
 -->
+<!--
+  Optional content module: skipped when com.intellij.hibernate is absent (e.g. Community
+  Edition). The extension registrations live here, in the module descriptor, because the
+  module classes are loaded by the module's own classloader: registering them from the main
+  plugin's config-file would load them with the main plugin classloader, which cannot see
+  the content-module jar and fails with ClassNotFoundException.
+-->
 <idea-plugin>
 
   <dependencies>
     <plugin id="com.intellij.hibernate"/>
+    <!-- The GORM persistence bridge (persistent/*) implements the persistence and JPA model
+         interfaces, so this module has to reach those plugins itself: the main plugin no
+         longer depends on them. -->
+    <plugin id="com.intellij.persistence"/>
+    <plugin id="com.intellij.javaee.jpa"/>
   </dependencies>
 
   <extensions defaultExtensionNs="com.intellij">
@@ -30,4 +42,5 @@
   <extensions defaultExtensionNs="org.intellij.grails">
     <facetProvider implementation="org.apache.grails.intellij.module.hibernate.GormHibernateFacetProvider"/>
   </extensions>
+
 </idea-plugin>
