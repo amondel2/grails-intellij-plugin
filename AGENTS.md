@@ -203,6 +203,7 @@ Special packaging: `plugin/standardDsls/` sits outside the resource roots and is
 | Commit fails with `1Password: failed to fill whole buffer` | Transient signing hiccup — retry the commit |
 | Wrong JDK / build fails to configure | `sdk env` (JDK pinned in `.sdkmanrc`, no toolchain) |
 | RAT failure on a new file | Add the Apache license header; excludes need a justification |
+| A feature "missing" after switching plugin builds | Rebuild before judging — hit the Gradle refresh icon (or `./gradlew buildPlugin`) so the sandbox picks up the new classes. A stale build can make working code look broken, and the Grails project view pane is the usual tell because it is only added once an application is detected |
 
 ## Resources
 
