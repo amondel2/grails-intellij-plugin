@@ -22,12 +22,14 @@ package org.apache.grails.intellij.plugin.gradle;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.vfs.VirtualFile;
 import junit.framework.TestCase;
+import org.apache.grails.intellij.lib.testFramework.UltimateOnlyTest;
 import org.apache.grails.intellij.plugin.config.GrailsFramework;
 import org.apache.grails.intellij.plugin.runner.GrailsRunConfigurationType;
 import org.apache.grails.intellij.plugin.structure.GrailsApplication;
 import org.apache.grails.intellij.plugin.structure.GrailsApplicationProvider;
 import org.jetbrains.plugins.gradle.importing.GradleImportingTestCase;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.runners.Parameterized;
 
 import java.io.IOException;
@@ -35,6 +37,8 @@ import java.util.Collection;
 import java.util.Collections;
 
 // Grails 6 still uses the org.grails coordinates, and resolves its shell as org.grails:grails-shell
+// Kept off the Community run like GradleGrailsImportingTest: same Gradle test-framework base class.
+@Category(UltimateOnlyTest.class)
 public class GradleGrails6ImportingTest extends GradleImportingTestCase {
 
   @SuppressWarnings("MethodOverridesStaticMethodOfSuperclass")

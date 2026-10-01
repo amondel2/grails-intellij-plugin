@@ -24,9 +24,9 @@ import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.plugins.gradle.tooling.AbstractModelBuilderService;
 import org.jetbrains.plugins.gradle.tooling.Message;
 import org.jetbrains.plugins.gradle.tooling.ModelBuilderContext;
-import org.jetbrains.plugins.gradle.tooling.ModelBuilderService;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -35,18 +35,21 @@ import java.util.stream.Collectors;
  * @author Vladislav.Soroka
  */
 @SuppressWarnings("SSBasedInspection")
-public class GrailsModuleModelBuilderImpl implements ModelBuilderService {
+public class GrailsModuleModelBuilderImpl extends AbstractModelBuilderService {
+  /** Title of the Build tool window message reported when the Grails shell cannot be resolved. */
+  public static final String SHELL_NOT_RESOLVED_TITLE = "Grails shell could not be resolved";
+
   @Override
   public boolean canBuild(String modelName) {
     return GrailsModule.class.getName().equals(modelName);
   }
 
   @Override
-  public Object buildAll(String modelName, Project project) {
-    Context context = Context.from(project);
-    if (context == null) return null;
+  public Object buildAll(String modelName, Project project, ModelBuilderContext context) {
+    Context grailsContext = Context.from(project);
+    if (grailsContext == null) return null;
 
-    GrailsVersionInfo grailsVersionInfo = context.myGrailsVersionInfo;
+    GrailsVersionInfo grailsVersionInfo = grailsContext.myGrailsVersionInfo;
 
     // Prefer the explicit grailsVersion project property. This must be known before adding the shell
     // dependency: the shell artifact is not always version-managed by the platform/BOM (e.g. Grails 7's
@@ -67,15 +70,17 @@ public class GrailsModuleModelBuilderImpl implements ModelBuilderService {
     // is declarable only, which made the whole model build fail and left Gradle 9 projects (Grails 8)
     // untagged as Grails modules. A detached configuration gets no dependency management, hence the
     // explicit version.
-    Configuration configuration = project.getConfigurations().detachedConfiguration(new DefaultExternalModuleDependency(
-      grailsVersionInfo.gradleDependencyGroup, grailsVersionInfo.shellArtifactId, version));
+    DefaultExternalModuleDependency shell = new DefaultExternalModuleDependency(
+      grailsVersionInfo.gradleDependencyGroup, grailsVersionInfo.shellArtifactId, version);
+    Configuration configuration = project.getConfigurations().detachedConfiguration(shell);
 
-    return new GrailsModuleImpl(version, context.grailsPluginCoordinates, resolveShellUrls(project, configuration));
+    return new GrailsModuleImpl(version, grailsContext.grailsPluginCoordinates,
+                                resolveShellUrls(project, context, configuration, shell));
   }
 
   private static @Nullable String findResolvedVersion(Project project, String group, String name) {
     Configuration classpath = project.getConfigurations().findByName("compileClasspath");
-    if (classpath != null) return null; // TEMP
+    if (classpath == null) return null;
     return classpath.getResolvedConfiguration().getLenientConfiguration().getAllModuleDependencies()
       .stream()
       .filter(dep -> group.equals(dep.getModuleGroup()) && name.equals(dep.getModuleName()))
@@ -87,14 +92,27 @@ public class GrailsModuleModelBuilderImpl implements ModelBuilderService {
   /**
    * The shell classpath only backs the Grails command executor, so failing to resolve it (e.g. its
    * org.gradle:gradle-tooling-api dependency lives outside Maven Central) must not cost the module its
-   * Grails support.
+   * Grails support. The reason is reported to the Build tool window, where a user missing the Grails
+   * commands looks, rather than only to the Gradle log.
    */
-  private static @Nullable List<String> resolveShellUrls(Project project, Configuration configuration) {
+  private @Nullable List<String> resolveShellUrls(Project project,
+                                                  ModelBuilderContext context,
+                                                  Configuration configuration,
+                                                  DefaultExternalModuleDependency shell) {
     try {
       return configuration.resolve().stream().map(file -> file.getAbsolutePath()).collect(Collectors.toList());
     }
     catch (RuntimeException e) {
-      project.getLogger().warn("Unable to resolve the Grails shell, Grails commands will not be available in the IDE", e);
+      context.getMessageReporter().createMessage()
+        .withGroup(this)
+        .withKind(Message.Kind.WARNING)
+        .withTitle(SHELL_NOT_RESOLVED_TITLE)
+        .withText("Unable to resolve " + shell.getGroup() + ":" + shell.getName() + ":" + shell.getVersion() +
+                  " for '" + project.getName() + "', so Grails commands and the Grails run configuration are not" +
+                  " available for it. Add a repository that provides the shell and its dependencies (for example" +
+                  " https://repo.grails.org/grails/restricted for the Gradle Tooling API), then reload the Gradle project.")
+        .withException(e)
+        .reportMessage(project);
       return null;
     }
   }

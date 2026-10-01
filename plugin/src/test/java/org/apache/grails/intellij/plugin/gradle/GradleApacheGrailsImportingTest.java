@@ -27,7 +27,11 @@ import com.intellij.openapi.externalSystem.service.project.ProjectDataManager;
 import com.intellij.openapi.externalSystem.util.ExternalSystemApiUtil;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.testFramework.fixtures.BuildViewTestFixture;
 import junit.framework.TestCase;
+import kotlin.Unit;
+import org.apache.grails.intellij.lib.gradle.tooling.builder.GrailsModuleModelBuilderImpl;
+import org.apache.grails.intellij.lib.testFramework.UltimateOnlyTest;
 import org.apache.grails.intellij.plugin.config.GrailsFramework;
 import org.apache.grails.intellij.plugin.runner.GrailsRunConfigurationType;
 import org.apache.grails.intellij.plugin.structure.GrailsApplication;
@@ -36,6 +40,7 @@ import org.jetbrains.plugins.gradle.importing.GradleImportingTestCase;
 import org.jetbrains.plugins.gradle.service.project.GradleProjectResolverUtil;
 import org.jetbrains.plugins.gradle.util.GradleConstants;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.runners.Parameterized;
 
 import java.io.IOException;
@@ -43,6 +48,8 @@ import java.util.Collection;
 import java.util.Collections;
 
 // Apache Grails (7+) uses the org.apache.grails coordinates, and Grails 8 requires Gradle 9
+// Kept off the Community run like GradleGrailsImportingTest: same Gradle test-framework base class.
+@Category(UltimateOnlyTest.class)
 public class GradleApacheGrailsImportingTest extends GradleImportingTestCase {
   @Parameterized.Parameter(1) public String grailsVersion;
 
@@ -50,7 +57,7 @@ public class GradleApacheGrailsImportingTest extends GradleImportingTestCase {
   @Parameterized.Parameters(name = "with Gradle-{0}, Grails-{1}")
   public static Collection<Object[]> data() {
     return Collections.singletonList(
-      new Object[]{"9.6.0", "8.0.0-M6"}
+      new Object[]{"9.7.1", "8.0.0-RC1"}
     );
   }
 
@@ -67,14 +74,26 @@ public class GradleApacheGrailsImportingTest extends GradleImportingTestCase {
   }
 
   @Test
-  public void importGrailsProjectWithUnresolvableShell() throws IOException {
-    // Maven Central alone cannot resolve the Grails shell, which must not prevent Grails support
-    importGrailsProject("");
+  public void importGrailsProjectWithUnresolvableShell() throws Exception {
+    BuildViewTestFixture buildView = new BuildViewTestFixture(getMyProject());
+    buildView.setUp();
+    try {
+      // Maven Central alone cannot resolve the Grails shell, which must not prevent Grails support
+      importGrailsProject("");
 
-    assertGrailsModule(getModule("project"), grailsVersion, "org.apache.grails.gradle.grails-web", false);
-    // without the shell there is no executor for run-app, so no Grails run configuration is offered
-    GrailsApplication application = createApplication();
-    TestCase.assertFalse(ReadAction.compute(() -> GrailsRunConfigurationType.isRunnable(application)));
+      assertGrailsModule(getModule("project"), grailsVersion, "org.apache.grails.gradle.grails-web", false);
+      // without the shell there is no executor for run-app, so no Grails run configuration is offered
+      GrailsApplication application = createApplication();
+      TestCase.assertFalse(ReadAction.compute(() -> GrailsRunConfigurationType.isRunnable(application)));
+      // and the reason is a Build tool window message, not only a line in the Gradle log
+      buildView.assertSyncViewTreeEquals(tree -> {
+        TestCase.assertTrue(tree, tree.contains(GrailsModuleModelBuilderImpl.SHELL_NOT_RESOLVED_TITLE));
+        return Unit.INSTANCE;
+      });
+    }
+    finally {
+      buildView.tearDown();
+    }
   }
 
   private GrailsApplication createApplication() {
@@ -91,6 +110,9 @@ public class GradleApacheGrailsImportingTest extends GradleImportingTestCase {
                          "grails-app/services", "grails-app/taglib", "grails-app/views/layouts", "src/main/groovy");
     createProjectSubFile("gradle.properties", "grailsVersion=" + grailsVersion);
 
+    // grails-gsp is left out on purpose: the 8.0.0-RC1 GroovyPagePlugin trips a Gradle 10 deprecation (a
+    // Provider used as a boolean), and these tests run Gradle with warning mode "fail" so that deprecated
+    // API use in the plugin's own model builder cannot slip through.
     importProject(createBuildScriptBuilder().withBuildScriptMavenCentral().withMavenCentral()
                     .addBuildScriptPostfix("""
                                              repositories {
@@ -106,7 +128,6 @@ public class GradleApacheGrailsImportingTest extends GradleImportingTestCase {
                                   group = "myapp"
                                   apply plugin:"war"
                                   apply plugin:"org.apache.grails.gradle.grails-web"
-                                  apply plugin:"org.apache.grails.gradle.grails-gsp"
 
                                   repositories {
                                   """ + extraRepositories + """
