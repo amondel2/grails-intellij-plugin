@@ -50,7 +50,7 @@ final class GrailsScriptRunConfigurationProducer extends LazyRunConfigurationPro
                                                   @NotNull Ref<PsiElement> sourceElement) {
     GrailsApplication application = GrailsActionUtil.getGrailsApplication(context.getDataContext());
     if (application == null) return false;
-    if (application.getGrailsVersion().isAtLeast(Version.GRAILS_6_0)) return false;
+    if (!GrailsRunConfigurationType.isRunnable(application)) return false;
 
     PsiElement element = context.getPsiLocation();
     if (!(element instanceof GroovyFile file)) return false;

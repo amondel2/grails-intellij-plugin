@@ -34,7 +34,6 @@ import org.apache.grails.intellij.plugin.GrailsBundle;
 import org.apache.grails.intellij.plugin.runner.GrailsRunConfiguration;
 import org.apache.grails.intellij.plugin.runner.GrailsRunConfigurationType;
 import org.apache.grails.intellij.plugin.structure.GrailsApplication;
-import org.apache.grails.intellij.plugin.util.version.Version;
 import org.apache.grails.intellij.plugin.mvc.MvcCommand;
 
 public class GrailsRunConfigurationTask extends GrailsApplicationBackgroundTask {
@@ -45,7 +44,7 @@ public class GrailsRunConfigurationTask extends GrailsApplicationBackgroundTask 
 
   @Override
   protected void run(@NotNull GrailsApplication application, @NotNull ProgressIndicator indicator) {
-    if (application.getGrailsVersion().isAtLeast(Version.GRAILS_6_0)) return;
+    if (!GrailsRunConfigurationType.isRunnable(application)) return;
 
     final GrailsRunConfigurationType configurationType = GrailsRunConfigurationType.getInstance();
     final RunManager runManager = RunManager.getInstance(getProject());

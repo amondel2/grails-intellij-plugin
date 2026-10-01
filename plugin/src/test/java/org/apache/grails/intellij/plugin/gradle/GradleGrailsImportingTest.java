@@ -81,6 +81,7 @@ public class GradleGrailsImportingTest extends GradleImportingTestCase {
     Module module = getModule("project");
     VirtualFile appRoot = GrailsFramework.getInstance().findAppRoot(module);
     TestCase.assertNotNull(appRoot);
+    GradleApacheGrailsImportingTest.assertGrailsModule(module, grailsVersion, "org.grails.grails-web", true);
   }
 
   private void createGrailsStdFolders() throws IOException {

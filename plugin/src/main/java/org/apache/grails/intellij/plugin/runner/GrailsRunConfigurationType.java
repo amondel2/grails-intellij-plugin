@@ -25,6 +25,8 @@ import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.apache.grails.intellij.plugin.GrailsBundle;
 import org.apache.grails.intellij.plugin.GroovyMvcIcons;
+import org.apache.grails.intellij.plugin.structure.GrailsApplication;
+import org.apache.grails.intellij.plugin.util.version.Version;
 
 import javax.swing.Icon;
 
@@ -59,6 +61,17 @@ public final class GrailsRunConfigurationType implements ConfigurationType {
   @Override
   public String getHelpTopic() {
     return "reference.dialogs.rundebug.GrailsRunConfigurationType";
+  }
+
+  /**
+   * Whether Grails run configurations (run-app and other Grails commands) are offered for the application.
+   * Grails 6+ applications run them through the Grails shell (org.grails:grails-shell for Grails 6,
+   * org.apache.grails:grails-shell-cli for Apache Grails 7+), so they are runnable whenever the Gradle
+   * import resolved that shell.
+   */
+  public static boolean isRunnable(@NotNull GrailsApplication application) {
+    return application.getGrailsVersion().isLessThan(Version.GRAILS_6_0)
+           || GrailsCommandExecutor.getGrailsExecutor(application) != null;
   }
 
   public static GrailsRunConfigurationType getInstance() {
