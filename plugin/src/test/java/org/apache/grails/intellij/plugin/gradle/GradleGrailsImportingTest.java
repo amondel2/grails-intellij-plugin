@@ -25,6 +25,11 @@ import junit.framework.TestCase;
 import org.jetbrains.plugins.gradle.importing.GradleImportingTestCase;
 import org.apache.grails.intellij.plugin.config.GrailsFramework;
 import org.apache.grails.intellij.lib.testFramework.UltimateOnlyTest;
+import org.gradle.util.GradleVersion;
+import org.jetbrains.plugins.gradle.tooling.GradleJvmResolver;
+import org.jetbrains.plugins.gradle.tooling.JavaVersionRestriction;
+import org.jetbrains.annotations.NotNull;
+import org.junit.Assume;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runners.Parameterized;
@@ -50,6 +55,34 @@ public class GradleGrailsImportingTest extends GradleImportingTestCase {
       // should be 7.6 -> 5.3.0, but Grails Gradle plugin fails
       // strict compatibility check that is enabled in the test
     );
+  }
+
+  /**
+   * Gradle below 5 needs a JDK that modern machines no longer ship, so probe before {@code super.setUp()}:
+   * the base class resolves the JDK from {@code setUpInWriteAction}, where a failed assumption resurfaces
+   * as a plain failure. Only pre-5 Gradle is probed, because the resolver needs an initialised application.
+   */
+  @Override
+  protected void setUp() throws Exception {
+    if (isGradleBelow5()) {
+      Assume.assumeTrue("no installed JDK that Gradle " + getGradleVersion() + " supports",
+                        hasJdkFor(GradleVersion.version(getGradleVersion())));
+    }
+    super.setUp();
+  }
+
+  private boolean isGradleBelow5() {
+    return GradleVersion.version(getGradleVersion()).getBaseVersion().compareTo(GradleVersion.version("5.0")) < 0;
+  }
+
+  private static boolean hasJdkFor(@NotNull GradleVersion gradleVersion) {
+    try {
+      GradleJvmResolver.resolveGradleJvmHomePath(gradleVersion, JavaVersionRestriction.DEFAULT);
+      return true;
+    }
+    catch (RuntimeException e) {
+      return false;
+    }
   }
 
   @Test
