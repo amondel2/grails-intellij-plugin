@@ -57,7 +57,7 @@ public class GradleApacheGrailsImportingTest extends GradleImportingTestCase {
   @Parameterized.Parameters(name = "with Gradle-{0}, Grails-{1}")
   public static Collection<Object[]> data() {
     return Collections.singletonList(
-      new Object[]{"9.7.1", "8.0.0-RC1"}
+      new Object[]{"9.8.0", "8.0.0-RC2"}
     );
   }
 
@@ -110,9 +110,9 @@ public class GradleApacheGrailsImportingTest extends GradleImportingTestCase {
                          "grails-app/services", "grails-app/taglib", "grails-app/views/layouts", "src/main/groovy");
     createProjectSubFile("gradle.properties", "grailsVersion=" + grailsVersion);
 
-    // grails-gsp is left out on purpose: the 8.0.0-RC1 GroovyPagePlugin trips a Gradle 10 deprecation (a
-    // Provider used as a boolean), and these tests run Gradle with warning mode "fail" so that deprecated
-    // API use in the plugin's own model builder cannot slip through.
+    // grails-gsp is left out on purpose: the GroovyPagePlugin (still as of 8.0.0-RC2) trips a Gradle 10
+    // deprecation (a Provider used as a boolean), and these tests run Gradle with warning mode "fail" so
+    // that deprecated API use in the plugin's own model builder cannot slip through.
     importProject(createBuildScriptBuilder().withBuildScriptMavenCentral().withMavenCentral()
                     .addBuildScriptPostfix("""
                                              repositories {

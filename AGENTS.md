@@ -83,8 +83,11 @@ limitations under the License.
 6. **Don't add license headers to `testdata/`** — the content *is* the test input;
    headers break parser/position-sensitive tests.
 7. **No wildcard imports** — use explicit imports, matching the existing sources.
-8. **JDK is pinned via `.sdkmanrc`** (Java 25, Gradle 9.7.1) — no Gradle toolchain on
+8. **JDK is pinned via `.sdkmanrc`** (Java 25, Gradle 9.8.0) — no Gradle toolchain on
    purpose, for reproducible builds. Run `sdk env` if the build complains about the JDK.
+   The `gradle=` pin must match the wrapper's `distributionUrl` (the source distribution
+   bootstraps its wrapper from it); CI fails when they differ, so a wrapper bump also
+   updates `.sdkmanrc`, `INSTALL`, `README.md` and this file.
 9. **Remove debug probes before committing** (see Debugging below).
 10. **Retry transient commit failures.** Git commits can fail with
     `1Password: failed to fill whole buffer` (signing) — just retry.
@@ -104,7 +107,7 @@ limitations under the License.
 | IntelliJ Platform | 2026.2.2 Ultimate (`sinceBuild` 262.10315.125) |
 | JDK (build) | 25 (pinned in `.sdkmanrc`) |
 | JDK (`grails-rt`, `grails-compiler-patch`, `jps-plugin`) | targets Java 8/11 |
-| Gradle | 9.7.1 (wrapper) |
+| Gradle | 9.8.0 (wrapper) |
 | IntelliJ Platform Gradle Plugin | 2.x |
 | Kotlin | 2.4.x (stdlib not bundled) |
 | Tests | JUnit 4 + AssertJ + IntelliJ test framework (light/heavy fixtures) |

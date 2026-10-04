@@ -37,6 +37,18 @@ jobs:
     steps:
       - name: "📥 Checkout repository"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: "🔒 Check .sdkmanrc pins the wrapper's Gradle version"
+        # The source distribution ships without the wrapper and regenerates it at the Gradle
+        # version in .sdkmanrc, so a stale pin makes release verification rebuild with a different
+        # Gradle than CI released with. Dependabot bumps the wrapper but cannot update .sdkmanrc.
+        run: |
+          sdkman="$(sed -n 's/^gradle=//p' .sdkmanrc)"
+          wrapper="$(sed -nE 's/^distributionUrl=.*gradle-(.+)-(bin|all)\.zip$/\1/p' gradle/wrapper/gradle-wrapper.properties)"
+          if [ -z "$sdkman" ] || [ "$sdkman" != "$wrapper" ]; then
+            echo "::error file=.sdkmanrc::.sdkmanrc pins gradle=${sdkman} but the wrapper uses Gradle ${wrapper}. Set gradle=${wrapper} in .sdkmanrc and update the Gradle version in INSTALL, README.md and AGENTS.md."
+            exit 1
+          fi
+          echo "✅ .sdkmanrc and the wrapper both use Gradle ${sdkman}"
       - name: "📝 Read JDK version from .sdkmanrc"
         id: sdkmanrc
         run: echo "java=$(grep -E '^java=' .sdkmanrc | cut -d= -f2 | sed 's/-librca$//')" >> "$GITHUB_OUTPUT"
