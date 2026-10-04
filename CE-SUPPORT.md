@@ -105,8 +105,9 @@ release.
 ```
 
 Tests that need an Ultimate plugin are tagged `@Category(UltimateOnlyTest.class)` (class or
-method level) and are excluded from `testIdeCe`. The nightly GitHub Actions job runs the
-Community verifier and test set; pull-request builds run the Ultimate suite and verifier.
+method level) and are excluded from `testIdeCe`. Every pull request and push runs both the
+Ultimate suite and verifier and the Community verifier and test set; the Community job also runs
+nightly, to catch an upstream Community change.
 
 ## Adding a feature that needs an Ultimate plugin
 
