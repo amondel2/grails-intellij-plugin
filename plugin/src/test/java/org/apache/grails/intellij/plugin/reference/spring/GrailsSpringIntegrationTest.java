@@ -172,7 +172,7 @@ public class GrailsSpringIntegrationTest extends HddGrailsTestCase {
   }
 
   /**
-   * Beans declared through the Grails 8 beans DSL are Spring beans, injectable by name like any other.
+   * Beans declared through the Grails 8 beans DSL are Spring beans, injectable by name, or by an alias, like any other.
    */
   public void testBeansDslBeanInjection() {
     myFixture.addClass("package grails.compiler.beans; public @interface GrailsBeans {}");
@@ -183,7 +183,7 @@ public class GrailsSpringIntegrationTest extends HddGrailsTestCase {
     addSimpleGroovyFile("""
                           class Application extends grails.boot.config.GrailsAutoConfiguration {
                             def beans = {
-                              bean('greeter', Greeter)
+                              bean('greeter', Greeter).aliases('salutation')
                               bean(Formatter).primary()
                               group('loud').conditionalOnProperty('app.loud') {
                                 bean(Shouter)
@@ -195,10 +195,11 @@ public class GrailsSpringIntegrationTest extends HddGrailsTestCase {
     PsiFile controllerFile = addController("""
                                              class CccController {
                                                def greeter
+                                               def salutation
                                                def formatter
                                                def shouter
                                                {
-                                                 greeter.greet() + formatter.format() + shouter.shout() + greeter.format()
+                                                 greeter.greet() + salutation.greet() + formatter.format() + shouter.shout() + greeter.format()
                                                }
                                              }
                                              """);

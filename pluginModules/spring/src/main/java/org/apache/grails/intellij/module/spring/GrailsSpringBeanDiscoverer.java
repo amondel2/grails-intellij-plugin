@@ -43,6 +43,7 @@ import com.intellij.spring.model.CommonSpringBean;
 import com.intellij.spring.model.custom.CustomModuleComponentsDiscoverer;
 import com.intellij.spring.model.jam.stereotype.CustomSpringComponent;
 import com.intellij.util.ArrayUtil;
+import com.intellij.util.ArrayUtilRt;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.containers.MultiMap;
 import org.apache.grails.intellij.plugin.spring.GrailsBeansDsl;
@@ -238,8 +239,10 @@ public final class GrailsSpringBeanDiscoverer extends CustomModuleComponentsDisc
       });
 
       if (resolveResult != null) {
-        result.add(new GrailsCustomSpringComponent(resolveResult, bean.getName()));
+        List<String> aliases = ContainerUtil.filter(bean.getAliases(), alias -> !existBeans.contains(alias));
+        result.add(new GrailsCustomSpringComponent(resolveResult, bean.getName(), ArrayUtilRt.toStringArray(aliases)));
         existBeans.add(bean.getName());
+        existBeans.addAll(aliases);
       }
     }
   }

@@ -21,10 +21,15 @@ package org.apache.grails.intellij.plugin.spring;
 
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiField;
+import com.intellij.psi.PsiNamedElement;
 import com.intellij.psi.PsiType;
 import com.intellij.psi.ResolveState;
 import com.intellij.psi.scope.ElementClassHint;
 import com.intellij.psi.scope.PsiScopeProcessor;
+import com.intellij.psi.util.CachedValueProvider.Result;
+import com.intellij.psi.util.CachedValuesManager;
+import com.intellij.psi.util.PsiModificationTracker;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -38,11 +43,16 @@ import org.jetbrains.plugins.groovy.lang.resolve.NonCodeMembersContributor;
 import org.jetbrains.plugins.groovy.lang.resolve.ResolveUtil;
 import org.jetbrains.plugins.groovy.util.dynamicMembers.DynamicMemberUtils;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Resolution, completion and type inference for the Grails 8 beans DSL (see {@link GrailsBeansDsl}):
  * <ul>
- *   <li>directly inside a {@code beans} closure or one of its groups, the {@code bean}/{@code field}/{@code method}/
- *   {@code group} declarations, whose results carry the qualifiers each of them chains with;</li>
+ *   <li>directly inside a {@code beans} closure or one of its groups, the {@code bean}/{@code field}/{@code method}
+ *   declarations, and in the {@code beans} closure the {@code group} declaration too, whose results carry the
+ *   qualifiers each of them chains with;</li>
  *   <li>inside a {@code bean(...)} or {@code method(...)} body, the members declared by the {@code field(...)} and
  *   {@code method(...)} declarations beside it, which the compiled factory methods share.</li>
  * </ul>
@@ -52,11 +62,10 @@ public final class GrailsBeansDslMemberContributor extends NonCodeMembersContrib
   public static final String MEMBER_ORIGIN_INFO = "via Grails beans DSL";
 
   /**
-   * The declarations and their qualifier chains. Every qualifier that takes arguments takes {@code Object...}, so
-   * named attributes, types, String class names and the trailing body closure are all accepted.
+   * The {@code bean}, {@code field} and {@code method} declarations, available in a {@code beans} closure and in
+   * the body of a group.
    */
-  static final String DSL_SOURCE = """
-    class GrailsBeansDsl {
+  private static final String DECLARATIONS = """
       /** Declares a bean named after the decapitalized simple name of {@code type}, built by its no-argument constructor. */
       BeanDeclaration bean(Class type) {}
       /** Declares a bean named after the decapitalized simple name of {@code type}. The closure's typed parameters are injected; the closure body builds the bean, or, left empty, the constructor taking the parameters is called. */
@@ -87,16 +96,24 @@ public final class GrailsBeansDslMemberContributor extends NonCodeMembersContrib
       MethodDeclaration method(String name, Class type) {}
       /** Declares a private helper method returning {@code type}, whose parameters and body are the closure's. */
       MethodDeclaration method(String name, Class type, Closure body) {}
+    """;
 
-      /** Declares a nested configuration class holding the declarations in its body, conditioned as a whole. */
-      GroupDeclaration group() {}
-      /** Declares a nested configuration class holding the declarations in its body. */
-      GroupDeclaration group(Closure body) {}
-      /** Declares a nested configuration class named after {@code name}, conditioned as a whole. */
+  /**
+   * The {@code group} declaration, available in a {@code beans} closure only: groups do not nest, and every group
+   * is named.
+   */
+  private static final String GROUP_DECLARATION = """
+      /** Declares a nested configuration class named after {@code name}, conditioned as a whole: its body closure follows the last qualifier. */
       GroupDeclaration group(String name) {}
       /** Declares a nested configuration class named after {@code name}, holding the declarations in its body. */
       GroupDeclaration group(String name, Closure body) {}
+    """;
 
+  /**
+   * The qualifier chains of the declarations. Every qualifier that takes arguments takes {@code Object...}, so
+   * named attributes, types, String class names and the trailing body closure are all accepted.
+   */
+  private static final String DECLARATION_TYPES = """
       static class BeanDeclaration {
         /** {@code @ConditionalOnMissingBean}: types positionally, the annotation's attributes by name. With no arguments the bean's own type is used. */
         BeanDeclaration conditionalOnMissingBean(Object... typesAndAttributes) {}
@@ -192,8 +209,17 @@ public final class GrailsBeansDslMemberContributor extends NonCodeMembersContrib
         /** Attaches any annotation to the group's configuration class, with its attributes by name. */
         GroupDeclaration annotate(Map attributes, Class annotationType, Closure body) {}
       }
-    }
     """;
+
+  /**
+   * The DSL directly inside a {@code beans} closure.
+   */
+  static final String DSL_SOURCE = "class GrailsBeansDsl {\n" + DECLARATIONS + GROUP_DECLARATION + DECLARATION_TYPES + "}\n";
+
+  /**
+   * The DSL directly inside the body of a group.
+   */
+  static final String GROUP_BODY_DSL_SOURCE = "class GrailsBeansDsl {\n" + DECLARATIONS + DECLARATION_TYPES + "}\n";
 
   @Override
   public void processDynamicElements(@NotNull PsiType qualifierType,
@@ -210,7 +236,7 @@ public final class GrailsBeansDslMemberContributor extends NonCodeMembersContrib
     GrClosableBlock closure = PsiTreeUtil.getParentOfType(place, GrClosableBlock.class);
     if (closure == null || !PsiTreeUtil.isAncestor(field, closure, true)) return;
 
-    if (GrailsBeansDsl.isDeclarationContainer(closure)) {
+    if (GrailsBeansDsl.isBeansClosure(closure)) {
       DynamicMemberUtils.process(processor, false, place, DSL_SOURCE);
       return;
     }
@@ -219,7 +245,11 @@ public final class GrailsBeansDslMemberContributor extends NonCodeMembersContrib
       GrailsBeansDsl.Declaration declaration = GrailsBeansDsl.getDeclarationOfBody(c);
       if (declaration == null) continue;
 
-      if (declaration.getKind() == GrailsBeansDsl.Kind.GROUP) return;
+      if (declaration.getKind() == GrailsBeansDsl.Kind.GROUP) {
+        // Declarations are written directly in a group body, but groups do not nest
+        if (c == closure) DynamicMemberUtils.process(processor, false, place, GROUP_BODY_DSL_SOURCE);
+        return;
+      }
       if (declaration.getStatement().getParent() instanceof GrClosableBlock container) {
         processSharedMembers(container, processor, state);
       }
@@ -235,19 +265,37 @@ public final class GrailsBeansDslMemberContributor extends NonCodeMembersContrib
     boolean processMethods = ResolveUtil.shouldProcessMethods(classHint);
     String nameHint = ResolveUtil.getNameHint(processor);
 
-    for (GrailsBeansDsl.Declaration declaration : GrailsBeansDsl.getDeclarations(container)) {
-      GrailsBeansDsl.Kind kind = declaration.getKind();
-      if (kind == GrailsBeansDsl.Kind.FIELD ? !processFields : kind != GrailsBeansDsl.Kind.METHOD || !processMethods) continue;
-
-      String name = declaration.getName();
-      if (name == null || (nameHint != null && !nameHint.equals(name))) continue;
-
-      PsiElement member = kind == GrailsBeansDsl.Kind.FIELD ? createField(declaration, name) : createMethod(declaration, name);
+    for (PsiNamedElement member : getSharedMembers(container)) {
+      if (member instanceof PsiField ? !processFields : !processMethods) continue;
+      if (nameHint != null && !nameHint.equals(member.getName())) continue;
       if (!processor.execute(member, state)) return;
     }
   }
 
-  private static @NotNull PsiElement createField(@NotNull GrailsBeansDsl.Declaration declaration, @NotNull String name) {
+  /**
+   * The members the {@code field(...)} and {@code method(...)} declarations of the container add to the compiled
+   * class, which the bodies declared beside them share.
+   */
+  private static @NotNull List<PsiNamedElement> getSharedMembers(@NotNull GrClosableBlock container) {
+    return CachedValuesManager.getCachedValue(container, () -> Result.create(computeSharedMembers(container),
+                                                                             PsiModificationTracker.MODIFICATION_COUNT));
+  }
+
+  private static @NotNull List<PsiNamedElement> computeSharedMembers(@NotNull GrClosableBlock container) {
+    List<PsiNamedElement> result = new ArrayList<>();
+    for (GrailsBeansDsl.Declaration declaration : GrailsBeansDsl.getDeclarations(container)) {
+      GrailsBeansDsl.Kind kind = declaration.getKind();
+      if (kind != GrailsBeansDsl.Kind.FIELD && kind != GrailsBeansDsl.Kind.METHOD) continue;
+
+      String name = declaration.getName();
+      if (name == null) continue;
+
+      result.add(kind == GrailsBeansDsl.Kind.FIELD ? createField(declaration, name) : createMethod(declaration, name));
+    }
+    return Collections.unmodifiableList(result);
+  }
+
+  private static @NotNull PsiNamedElement createField(@NotNull GrailsBeansDsl.Declaration declaration, @NotNull String name) {
     PsiElement navigationElement = declaration.getNavigationElement();
     PsiType type = declaration.getType();
     if (type == null) type = PsiType.getJavaLangObject(navigationElement.getManager(), navigationElement.getResolveScope());
@@ -257,7 +305,7 @@ public final class GrailsBeansDslMemberContributor extends NonCodeMembersContrib
     return field;
   }
 
-  private static @NotNull PsiElement createMethod(@NotNull GrailsBeansDsl.Declaration declaration, @NotNull String name) {
+  private static @NotNull PsiNamedElement createMethod(@NotNull GrailsBeansDsl.Declaration declaration, @NotNull String name) {
     PsiElement navigationElement = declaration.getNavigationElement();
     GrLightMethodBuilder method = new GrLightMethodBuilder(navigationElement.getManager(), name);
     method.setNavigationElement(navigationElement);
@@ -269,8 +317,9 @@ public final class GrailsBeansDslMemberContributor extends NonCodeMembersContrib
 
     GrClosableBlock body = declaration.getBody();
     if (body != null) {
+      // A parameter with a default value is optional, as in the overloads Groovy generates for the method
       for (GrParameter parameter : body.getParameters()) {
-        method.addParameter(parameter.getName(), parameter.getType());
+        method.addParameter(parameter.getName(), parameter.getType(), parameter.isOptional());
       }
     }
     return method;

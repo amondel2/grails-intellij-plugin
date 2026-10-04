@@ -202,6 +202,7 @@ public final class GrailsResourceBeanExtractor {
 
     private final String myName;
     private final List<GrReferenceExpression> myReferences = new ArrayList<>();
+    private final List<String> myAliases = new ArrayList<>();
 
     public BeanDescriptor(String name) {
       myName = name;
@@ -213,6 +214,13 @@ public final class GrailsResourceBeanExtractor {
 
     public List<GrReferenceExpression> getReferences() {
       return myReferences;
+    }
+
+    /**
+     * Further names Spring resolves to the same bean.
+     */
+    public List<String> getAliases() {
+      return myAliases;
     }
 
     public @Nullable PsiType getType() {
