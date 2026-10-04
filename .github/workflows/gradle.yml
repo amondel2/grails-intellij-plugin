@@ -20,9 +20,8 @@ on:
       - main
   pull_request:
   workflow_dispatch:
-  # Nightly Community Edition checks: loading the plugin on an IdeaIC sandbox is the one thing a
-  # pull-request build cannot verify cheaply (it needs a fresh ~1GB IdeaIC download), and it is
-  # also the first thing an upstream Community binary change breaks. So testIdeCe runs nightly only.
+  # Nightly Community Edition checks: the job also runs on every pull request and push, but an
+  # upstream Community binary change can break the IdeaIC sandbox with no change on our side.
   schedule:
     - cron: '0 3 * * *'
 # Queue jobs - cancel in-progress PR runs when new commits are pushed, but allow branch builds to complete
@@ -103,11 +102,10 @@ jobs:
           path: plugin/build/reports/pluginVerifier
   test-ce:
     name: 'Community Edition Tests'
-    # Nightly, or on demand through "Run workflow": needs the IdeaIC 2026.2 distribution (~1GB),
-    # so pull-request builds skip it. -PplatformEdition=IC runs the Community-safe test set on that
-    # sandbox and points Plugin Verifier at IC, which is what proves the ZIP loads there and that
-    # the main jar reaches for no Ultimate class.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Every pull request and push, and nightly: needs the IdeaIC 2026.2 distribution (~1GB).
+    # -PplatformEdition=IC runs the Community-safe test set on that sandbox and points Plugin
+    # Verifier at IC, which is what proves the ZIP loads there and that the main jar reaches for
+    # no Ultimate class - neither the Ultimate test suite nor the Ultimate verifier catches that.
     runs-on: ubuntu-latest
     steps:
       - name: "📥 Checkout repository"

@@ -68,6 +68,10 @@ release.
 - Run configurations, the Grails console and the Grails Forge project wizard
 - The `beans {}` DSL in `resources.groovy` and `doWithSpring` closures
   (`GrailsResourcesGroovyMemberContributor` does not depend on the Spring plugin)
+- The Grails 8 compile-time beans DSL (`@GrailsBeans`, and the implicit `beans` property of plugin
+  descriptors, the `Application` class and unit tests): declarations, qualifier chains and shared
+  `field`/`method` members (`GrailsBeansDslMemberContributor`). Registering the declared beans in the
+  Spring model is part of the `spring` module
 - Gradle and Maven importing, coverage, copyright, i18n, language injection
 
 ## What does not work in Community Edition
@@ -101,8 +105,9 @@ release.
 ```
 
 Tests that need an Ultimate plugin are tagged `@Category(UltimateOnlyTest.class)` (class or
-method level) and are excluded from `testIdeCe`. The nightly GitHub Actions job runs the
-Community verifier and test set; pull-request builds run the Ultimate suite and verifier.
+method level) and are excluded from `testIdeCe`. Every pull request and push runs both the
+Ultimate suite and verifier and the Community verifier and test set; the Community job also runs
+nightly, to catch an upstream Community change.
 
 ## Adding a feature that needs an Ultimate plugin
 
