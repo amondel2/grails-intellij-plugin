@@ -19,11 +19,13 @@
 
 package org.apache.grails.intellij.plugin.references.domain.detachedCriteria;
 
+import com.intellij.openapi.util.Pair;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiModifier;
+import com.intellij.psi.PsiType;
 import com.intellij.psi.ResolveState;
 import com.intellij.psi.scope.ElementClassHint;
 import com.intellij.psi.scope.PsiScopeProcessor;
@@ -37,10 +39,12 @@ import org.jetbrains.plugins.groovy.lang.psi.api.statements.blocks.GrClosableBlo
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrExpression;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrMethodCall;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrReferenceExpression;
+import org.jetbrains.plugins.groovy.lang.psi.impl.synthetic.GrLightField;
 import org.jetbrains.plugins.groovy.lang.psi.util.GroovyPropertyUtils;
 import org.jetbrains.plugins.groovy.lang.resolve.ClosureMemberContributor;
 import org.jetbrains.plugins.groovy.lang.resolve.ResolveUtil;
 
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -64,9 +68,6 @@ final class WhereQueryClosureMemberContributor extends ClosureMemberContributor 
                                 @NotNull PsiScopeProcessor processor,
                                 @NotNull PsiElement place,
                                 @NotNull ResolveState state) {
-    String nameHint = ResolveUtil.getNameHint(processor);
-    if (nameHint == null) return;
-
     if (!(place instanceof GrReferenceExpression refExpr) || refExpr.isQualified()) return;
     if (closure != PsiTreeUtil.getParentOfType(place, GrClosableBlock.class)) return;
 
@@ -77,6 +78,12 @@ final class WhereQueryClosureMemberContributor extends ClosureMemberContributor 
 
     PsiClass domainClass = getQueriedDomainClass(closure);
     if (domainClass == null) return;
+
+    String nameHint = ResolveUtil.getNameHint(processor);
+    if (nameHint == null) {
+      if (processProperties) processCompletionVariants(domainClass, processor, state);
+      return;
+    }
 
     // A Groovy property is a private field plus accessors, and from outside its class it is read through the
     // getter: resolving to the field itself is an access violation under @CompileStatic. So the property is
@@ -115,6 +122,28 @@ final class WhereQueryClosureMemberContributor extends ClosureMemberContributor 
 
     // Composing an existing query: criteria.where { ... }
     return DetachedCriteriaUtil.getDomainClassByDetachedCriteriaExpression(qualifier.getType());
+  }
+
+  /**
+   * Completion asks without a name hint. It only needs the names, so every queryable property is offered as a light
+   * field navigating to its declaration, unless the field itself can be read directly.
+   */
+  private static void processCompletionVariants(@NotNull PsiClass domainClass,
+                                                @NotNull PsiScopeProcessor processor,
+                                                @NotNull ResolveState state) {
+    Map<String, Pair<PsiType, PsiElement>> properties = DomainDescriptor.getPersistentProperties(domainClass);
+    for (Map.Entry<String, Pair<PsiType, PsiElement>> entry : properties.entrySet()) {
+      String name = entry.getKey();
+      PsiField field = findReadableField(domainClass, name);
+      PsiElement variant = field != null ? field : new GrLightField(domainClass, name, entry.getValue().first, entry.getValue().second);
+      if (!processor.execute(variant, state)) return;
+    }
+
+    for (String name : IMPLICIT_PROPERTIES) {
+      if (properties.containsKey(name)) continue;
+      PsiField field = findReadableField(domainClass, name);
+      if (field != null && !processor.execute(field, state)) return;
+    }
   }
 
   private static @Nullable PsiMethod findGetter(@NotNull PsiClass domainClass, @NotNull String getterName) {

@@ -20,11 +20,11 @@
 package org.apache.grails.intellij.plugin.references.domain.detachedCriteria;
 
 import com.intellij.psi.PsiClass;
+import com.intellij.psi.PsiClassType;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiSubstitutor;
 import com.intellij.psi.PsiType;
 import com.intellij.psi.PsiTypeParameter;
-import com.intellij.psi.impl.source.PsiImmediateClassType;
 import com.intellij.psi.util.PsiTypesUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -61,14 +61,16 @@ public final class DetachedCriteriaUtil {
   }
 
   public static @Nullable PsiClass getDomainClassByDetachedCriteriaExpression(@Nullable PsiType type) {
-    if (!(type instanceof PsiImmediateClassType)) return null;
+    // Any class type, not just an inferred one: a declared DetachedCriteria<Person> (a parameter or a field) is a
+    // PsiClassReferenceType.
+    if (!(type instanceof PsiClassType classType)) return null;
 
-    PsiClass detachedCriteriaClass = PsiTypesUtil.getPsiClass(type);
+    PsiClass detachedCriteriaClass = classType.resolve();
     if (detachedCriteriaClass == null || !DETACHED_CRITERIA_CLASS.equals(detachedCriteriaClass.getQualifiedName())) {
       return null;
     }
 
-    PsiType[] parameters = ((PsiImmediateClassType)type).getParameters();
+    PsiType[] parameters = classType.getParameters();
     if (parameters.length != 1) return null;
 
     PsiClass domainClass = PsiTypesUtil.getPsiClass(parameters[0]);
