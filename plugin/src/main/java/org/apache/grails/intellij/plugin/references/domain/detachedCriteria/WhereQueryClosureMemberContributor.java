@@ -71,6 +71,9 @@ final class WhereQueryClosureMemberContributor extends ClosureMemberContributor 
     if (!(place instanceof GrReferenceExpression refExpr) || refExpr.isQualified()) return;
     if (closure != PsiTreeUtil.getParentOfType(place, GrClosableBlock.class)) return;
 
+    // GORM rewrites bare properties, not explicit getter calls. Those must resolve on the actual owner or delegate.
+    if (refExpr.getParent() instanceof GrMethodCall call && call.getInvokedExpression() == refExpr) return;
+
     ElementClassHint classHint = processor.getHint(ElementClassHint.KEY);
     boolean processProperties = ResolveUtil.shouldProcessProperties(classHint);
     boolean processMethods = ResolveUtil.shouldProcessMethods(classHint);

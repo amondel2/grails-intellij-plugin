@@ -21,6 +21,7 @@ package org.apache.grails.intellij.plugin.domain;
 
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiMethod;
 import com.intellij.testFramework.UsefulTestCase;
 import org.apache.grails.intellij.lib.testFramework.GrailsTestCase;
 import org.jetbrains.plugins.groovy.codeInspection.untypedUnresolvedAccess.GrUnresolvedAccessInspection;
@@ -256,6 +257,47 @@ public class GormWhereQueryTest extends GrailsTestCase {
       }
       """);
     assertTrue(myDomainFile.getText().contains("Boolean enabled = true"));
+  }
+
+  /** GORM transforms bare properties, but an explicit getter call still needs a receiver that provides it. */
+  public void testGetterCallsAreNotResolvedAsProperties() {
+    PsiFile file = myFixture.addFileToProject("src/groovy/PersonService.groovy", """
+      import groovy.transform.CompileStatic
+
+      class PersonService {
+        @CompileStatic
+        def staticallyChecked() {
+          Person.where { <error descr="Cannot resolve symbol 'getAge'">getAge</error>() == 18 }
+        }
+
+        def dynamicallyChecked() {
+          Person.where { <warning descr="Cannot resolve symbol 'getAge'">getAge</warning>() == 18 }
+        }
+      }
+      """);
+    myFixture.configureFromExistingVirtualFile(file.getVirtualFile());
+    myFixture.checkHighlighting(true, false, true);
+  }
+
+  public void testExplicitGetterResolvesToClosureOwner() {
+    PsiFile file = myFixture.addFileToProject("src/groovy/PersonService.groovy", """
+      import groovy.transform.CompileStatic
+
+      @CompileStatic
+      class PersonService {
+        Integer getAge() { 18 }
+
+        def search() {
+          Person.where { age == getAg<caret>e() }
+        }
+      }
+      """);
+    myFixture.configureFromExistingVirtualFile(file.getVirtualFile());
+    myFixture.checkHighlighting(true, false, true);
+
+    PsiElement target = myFixture.getElementAtCaret();
+    UsefulTestCase.assertInstanceOf(target, PsiMethod.class);
+    assertEquals("PersonService", ((PsiMethod)target).getContainingClass().getName());
   }
 
   /** Only persistent properties take part in a where query; transients and unknown names stay unresolved. */
