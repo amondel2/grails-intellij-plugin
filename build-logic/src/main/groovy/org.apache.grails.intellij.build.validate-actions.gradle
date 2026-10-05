@@ -1,0 +1,42 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import org.apache.grails.intellij.build.ValidateActionsTask
+
+// Checks every `uses:` entry in the GitHub workflow files against the ASF approved-actions policy
+// (https://github.com/apache/infrastructure-actions). Applied to the root project only: the
+// .github/workflows directory it scans is the repository's.
+//
+// Deliberately not hooked into `check`: the approved list is fetched from ASF infrastructure on
+// every run, so the task needs the network and has no place in a local build. CI invokes it
+// explicitly from .github/workflows/validate-actions.yml.
+
+def workflows = fileTree(layout.projectDirectory.dir('.github/workflows'))
+workflows.include('*.yml', '*.yaml')
+
+tasks.register('validateActions', ValidateActionsTask) { ValidateActionsTask task ->
+    task.group = 'verification'
+    task.description = 'Validates that every uses: entry in the GitHub workflow files is on the ASF approved list.'
+    task.rootDirectory.set(layout.projectDirectory)
+    task.workflowFiles.from(workflows)
+    // The approved list is fetched from ASF infrastructure on every run, so unchanged workflow
+    // files do not imply an unchanged verdict. The scheduled run exists precisely to catch a
+    // pinned SHA being delisted upstream, which an up-to-date check would hide.
+    task.outputs.upToDateWhen { false }
+}

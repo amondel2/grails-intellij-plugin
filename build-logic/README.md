@@ -40,8 +40,15 @@ build still come from the root `gradle.properties` via `providers.gradleProperty
 | `compiler` | compiler plugins named in `compileServer.plugin` |
 | `rat` | root only — the licence audit |
 | `coverage-aggregation` | root only — cross-project JaCoCo |
+| `validate-actions` | root only — `validateActions`, the ASF approved-actions check on `.github/workflows` |
 | `reproducible`, `jacoco`, `vulnerability-scan` | applied transitively |
 | `repositories` | **settings** plugin — applied from `settings.gradle`, not by a project |
+
+## Tests
+
+Task classes with real logic are tested with Gradle TestKit under `src/test/groovy`, on the same
+JUnit 4 + AssertJ stack as the plugin. `./gradlew :build-logic:test` runs them; the root `check`
+depends on build-logic's `check`, so CI runs them (and `validatePlugins`) on every build.
 
 ## Groovy DSL gotchas
 
