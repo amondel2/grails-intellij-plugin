@@ -39,6 +39,9 @@ limitations under the License.
 ./gradlew rat
 ./gradlew runIde
 
+# GitHub Actions policy: every `uses:` must be on the ASF approved list (needs network)
+./gradlew validateActions
+
 # Plugin Verifier against specific builds (e.g. the next EAP) instead of the recommended set
 ./gradlew verifyPlugin -PpluginVerifierIdes=IU-263.3889.65
 
@@ -99,6 +102,11 @@ limitations under the License.
     Ultimate verifier follows content-module dependencies, so neither catches a missing module
     dependency; `./gradlew verifyPlugin -PplatformEdition=IC` and `runIde` do. Tag tests that
     need Ultimate plugins with `@Category(UltimateOnlyTest.class)`. See `CE-SUPPORT.md`.
+12. **Third-party GitHub Actions must be ASF-approved.** Anything outside `actions/*`, `github/*`
+    and `apache/*` must be pinned to a full SHA listed in
+    [apache/infrastructure-actions](https://github.com/apache/infrastructure-actions), with a
+    trailing `# vX.Y.Z` comment. `./gradlew validateActions` checks this; the
+    `validate-actions.yml` workflow runs it on workflow changes and weekly.
 
 ## Technology Stack
 
