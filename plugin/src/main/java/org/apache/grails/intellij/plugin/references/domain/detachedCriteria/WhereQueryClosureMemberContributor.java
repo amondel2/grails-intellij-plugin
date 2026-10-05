@@ -31,10 +31,8 @@ import com.intellij.psi.scope.ElementClassHint;
 import com.intellij.psi.scope.PsiScopeProcessor;
 import com.intellij.psi.util.PsiTreeUtil;
 import org.apache.grails.intellij.plugin.references.domain.DomainDescriptor;
-import org.apache.grails.intellij.plugin.util.GrailsArtifact;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.plugins.groovy.lang.psi.api.statements.arguments.GrArgumentList;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.blocks.GrClosableBlock;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrExpression;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrMethodCall;
@@ -51,15 +49,12 @@ import java.util.Set;
  * Resolves the bare property names of a GORM where query ({@code Person.where { active == true && age >= 18 }})
  * to the persistent properties of the queried domain class.
  * <p>
- * The GORM 5+ {@code GormEntity} trait declares {@code where(@DelegatesTo(DetachedCriteria) Closure)}: the delegate
- * is a raw {@code DetachedCriteria}, which has no such properties, because GORM rewrites the closure at compile time
- * (DetachedCriteriaTransformer) into criteria calls. Without this contributor the properties stay unresolved, which
+ * GORM runs the closure against a {@code DetachedCriteria} of that class (see DetachedCriteriaDelegatesToProvider),
+ * which has no such properties, because GORM rewrites the closure at compile time (DetachedCriteriaTransformer) into
+ * criteria calls. Without this contributor the properties stay unresolved, which
  * {@code @CompileStatic}/{@code @GrailsCompileStatic} code reports as an error although it compiles.
  */
 final class WhereQueryClosureMemberContributor extends ClosureMemberContributor {
-
-  // See DetachedCriteriaTransformer: the methods whose closure argument is transformed into a where query.
-  private static final Set<String> WHERE_METHODS = Set.of("where", "whereAny", "whereLazy", "find", "findAll");
 
   private static final Set<String> IMPLICIT_PROPERTIES = Set.of("id", "version");
 
@@ -105,26 +100,15 @@ final class WhereQueryClosureMemberContributor extends ClosureMemberContributor 
   }
 
   private static @Nullable PsiClass getQueriedDomainClass(@NotNull GrClosableBlock closure) {
-    PsiElement parent = closure.getParent();
-    if (parent instanceof GrArgumentList) parent = parent.getParent();
-    if (!(parent instanceof GrMethodCall call)) return null;
+    GrMethodCall call = DetachedCriteriaUtil.getWhereQueryCall(closure);
+    if (call == null) return null;
 
-    if (!(call.getInvokedExpression() instanceof GrReferenceExpression invoked)) return null;
-    if (!WHERE_METHODS.contains(invoked.getReferenceName())) return null;
-
-    GrExpression qualifier = invoked.getQualifierExpression();
-    if (qualifier == null) {
-      // An unqualified call from within the domain class itself.
-      PsiClass containingClass = PsiTreeUtil.getParentOfType(call, PsiClass.class);
-      return GrailsArtifact.DOMAIN.isInstance(containingClass) ? containingClass : null;
-    }
-
-    if (qualifier instanceof GrReferenceExpression qualifierRef && qualifierRef.resolve() instanceof PsiClass qualifierClass) {
-      return GrailsArtifact.DOMAIN.isInstance(qualifierClass) ? qualifierClass : null;
-    }
+    PsiClass domainClass = DetachedCriteriaUtil.getWhereQueryDomainClass(call);
+    if (domainClass != null) return domainClass;
 
     // Composing an existing query: criteria.where { ... }
-    return DetachedCriteriaUtil.getDomainClassByDetachedCriteriaExpression(qualifier.getType());
+    GrExpression qualifier = ((GrReferenceExpression)call.getInvokedExpression()).getQualifierExpression();
+    return qualifier == null ? null : DetachedCriteriaUtil.getDomainClassByDetachedCriteriaExpression(qualifier.getType());
   }
 
   /**
