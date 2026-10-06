@@ -259,7 +259,7 @@ files under it, so *Reveal in Project View* dead-ended.
 | RAT failure on a new file | Add the Apache license header; excludes need a justification |
 | A feature "missing" after switching plugin builds | Rebuild before judging — hit the Gradle refresh icon (or `./gradlew buildPlugin`) so the sandbox picks up the new classes. A stale build can make working code look broken, and the Grails project view pane is the usual tell because it is only added once an application is detected |
 | A project-view node shows the wrong label, or a filter change has no visible effect | Read "Project view gotchas" above before changing anything in `projectView/` — the renderer reads `PresentationData`'s coloured fragments, not `presentableText`, and the light fixture cannot see this class of bug |
-| `sdk env` leaves Gradle on the wrong JDK, or `instrumentCode` fails with `UnsupportedClassVersionError` | `.sdkmanrc` pins a JDK version that may not be installed (e.g. `25.0.3-librca`); `sdk env` then silently keeps the old default. Set `JAVA_HOME` to a matching JDK explicitly |
+
 
 ## Resources
 
