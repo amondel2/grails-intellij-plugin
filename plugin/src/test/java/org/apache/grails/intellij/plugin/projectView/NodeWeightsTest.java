@@ -32,8 +32,9 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 
 /**
- * GrailsNodeComparator orders directory nodes by subtracting their weights, so two nodes sharing a
- * weight compare equal and their order falls through to the platform comparator.
+ * GrailsNodeComparator orders directory nodes by subtracting their weights and returning the
+ * difference directly, so two nodes sharing a weight compare as 0 and their relative order is
+ * unspecified — the platform comparator is never reached.
  */
 public class NodeWeightsTest {
 
