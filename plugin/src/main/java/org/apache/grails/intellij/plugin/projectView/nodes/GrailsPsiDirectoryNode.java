@@ -104,16 +104,15 @@ public class GrailsPsiDirectoryNode extends PsiDirectoryNode {
   }
 
   /**
-   * The title is written as a coloured fragment here, not with {@code setPresentableText} in
-   * {@code updateImpl}, because the renderer draws {@code PresentationData}'s fragment list and
-   * {@code PsiDirectoryNode} fills that list with the directory name — the qualified path, such as
-   * {@code grails-app.i18n}, for a nested one. A field write is therefore invisible: the data reads
-   * {@code Tests:unit} while the tree keeps painting {@code test}.
+   * {@code PsiDirectoryNode.updateImpl} adds coloured fragments for module content roots; ordinary
+   * directories use {@code setPresentableText}, including qualified names such as {@code grails-app.i18n}.
+   * Gradle's per-source-set modules make {@code src/test} a content root, whose fragments can render as
+   * {@code test [app.test]}. The renderer prefers those fragments over {@code presentableText}, so
+   * setting only the latter to {@code Tests:unit} does not change that content-root label.
    *
-   * <p>{@code postprocess} is the only hook that runs after the platform has finished writing the label, on
-   * both the updated presentation and the template, so clearing the fragments and re-adding the title here
-   * is what reaches the renderer. Overriding {@code updateImpl} cannot win, because the platform fills the
-   * label during that same call.
+   * <p>{@code postprocess} applies the custom title to both the updated presentation and the template.
+   * Replacing any platform fragments and setting {@code presentableText} keeps the title consistent
+   * for both content roots and ordinary directories.
    */
   @Override
   protected void postprocess(@NotNull PresentationData data) {

@@ -22,6 +22,7 @@ package org.apache.grails.intellij.plugin.projectView.nodes;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.projectView.PresentationData;
 import com.intellij.ide.projectView.ViewSettings;
+import com.intellij.openapi.roots.ModuleRootModificationUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiManager;
@@ -46,34 +47,48 @@ public class GrailsPsiDirectoryNodeTest extends GrailsTestCase {
   }
 
   /**
-   * The renderer draws {@code PresentationData}'s coloured fragments, and {@code PsiDirectoryNode} fills
-   * them with the directory name. A title written only with {@code setPresentableText} is therefore
-   * invisible: the field reads correctly while the tree keeps painting the directory name. This regression
-   * shipped once — a lifted test root rendered as {@code test} instead of {@code Tests:unit} while its
-   * location string still showed — so the fragment list is what this asserts.
+   * Gradle's per-source-set modules make test directories module content roots. Only content roots
+   * receive the platform's coloured fragments, which take precedence over {@code presentableText}.
+   * Register the directory accordingly and verify that the platform adds fragments before our title
+   * replaces them, reproducing the case where a test root failed to render as {@code Tests:unit}.
    */
-  public void testTitleReplacesTheDirectoryNameFragments() {
-    GrailsPsiDirectoryNode node = nodeWithCustomPresentation("grails-app/i18n/messages.properties",
-                                                             "Translations", AllIcons.FileTypes.Properties,
-                                                             NodeWeights.TRANSLATIONS_FOLDER);
+  public void testTitleReplacesTheModuleContentRootFragments() {
+    PsiDirectory directory = findDirectoryCreatedBy("src/test/ExampleSpec.groovy");
+    ModuleRootModificationUtil.updateModel(getModule(), model -> model.addContentEntry(directory.getVirtualFile()));
+    GrailsPsiDirectoryNode node = new GrailsPsiDirectoryNode(directory, ViewSettings.DEFAULT, null,
+                                                             NodeWeights.TESTS_FOLDER, "Tests:unit", null, "src/test");
 
-    PresentationData data = rendered(node);
+    PresentationData data = new PresentationData();
+    node.updateImpl(data);
+
+    assertFalse("a module content root must have platform fragments before postprocess",
+                drawnFragments(data).isEmpty());
+    assertFalse("the platform fragments must still contain the original content-root label",
+                drawnFragments(data).contains("Tests:unit"));
+
+    node.postprocess(data);
 
     assertEquals("the fragments the renderer draws must be the title alone",
-                 List.of("Translations"), drawnFragments(data));
+                 List.of("Tests:unit"), drawnFragments(data));
+    assertEquals("Tests:unit", data.getPresentableText());
+    assertEquals("src/test", data.getLocationString());
   }
 
   /** An untitled node keeps the platform's own fragments, so nothing is lost by not clearing them. */
   public void testWithoutCustomPresentationKeepsPlatformFragments() {
-    PsiDirectory directory = findDirectoryCreatedBy("grails-app/views/index.gsp");
+    PsiDirectory directory = findDirectoryCreatedBy("src/test/ExampleSpec.groovy");
+    ModuleRootModificationUtil.updateModel(getModule(), model -> model.addContentEntry(directory.getVirtualFile()));
     GrailsPsiDirectoryNode node = new GrailsPsiDirectoryNode(directory, ViewSettings.DEFAULT);
 
-    PresentationData data = rendered(node);
+    PresentationData data = new PresentationData();
+    node.updateImpl(data);
+    List<String> platformFragments = drawnFragments(data);
+    assertFalse("a module content root must have platform fragments", platformFragments.isEmpty());
 
-    assertEquals("an untitled node shows the platform's own label",
-                 "grails-app.views", data.getPresentableText());
-    assertTrue("postprocess must not invent a title for an untitled node",
-               drawnFragments(data).stream().noneMatch("Views"::equals));
+    node.postprocess(data);
+
+    assertEquals("an untitled node must preserve the platform's content-root label",
+                 platformFragments, drawnFragments(data));
   }
 
   public void testLocationSurvivesAlongsideTheTitle() {
@@ -111,8 +126,9 @@ public class GrailsPsiDirectoryNodeTest extends GrailsTestCase {
     PresentationData data = new PresentationData();
     node.updateImpl(data);
 
-    assertFalse("no custom title must be applied without customization",
-                data.getPresentableText().contains("Translations"));
+    assertEquals("an ordinary nested directory uses presentableText for its qualified name",
+                 "grails-app.views", data.getPresentableText());
+    assertTrue("an ordinary directory has no platform fragments", drawnFragments(data).isEmpty());
     assertNotSame("a bespoke icon must not appear without customization", AllIcons.FileTypes.Properties,
                   data.getIcon(false));
   }
