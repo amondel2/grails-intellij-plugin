@@ -20,6 +20,7 @@
 package org.apache.grails.intellij.plugin.projectView.impl;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiDirectory;
@@ -36,8 +37,8 @@ import org.apache.grails.intellij.plugin.structure.GrailsApplication;
 import org.jetbrains.plugins.groovy.lang.psi.GroovyFile;
 
 import javax.swing.Icon;
-import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 public final class GrailsViewItems {
 
@@ -47,16 +48,35 @@ public final class GrailsViewItems {
 
   public static final Map<String, SpecialFolder> SPECIAL_GRAILS_APP_FOLDERS = specialFolders();
 
+  /** Subfolders of {@code grails-app/assets} shown as dedicated top-level nodes. */
+  public static final Map<String, SpecialFolder> SPECIAL_ASSET_FOLDERS = assetFolders();
+
+  /** Name of the {@code grails-app} directory whose subfolders are shown as dedicated nodes. */
+  public static final String ASSETS_DIR = "assets";
+
   private GrailsViewItems() {
   }
 
+  // Declaration order below is not the rendering order: GrailsNodeComparator sorts these nodes by
+  // their NodeWeights weight, so the two registries can be read in any order without affecting the tree.
   private static Map<String, SpecialFolder> specialFolders() {
-    // LinkedHashMap because the project view renders these in declaration order.
-    Map<String, SpecialFolder> result = new LinkedHashMap<>();
-    result.put("conf", new SpecialFolder(AllIcons.Nodes.ConfigFolder, NodeWeights.CONFIG_FOLDER, "Configuration"));
-    result.put("views", new SpecialFolder(GroovyMvcIcons.Gsp_logo, NodeWeights.VIEWS_FOLDER, "Views"));
-    result.put("init", new SpecialFolder(AllIcons.Nodes.ConfigFolder, NodeWeights.CONFIG_FOLDER - 1, "Initialization"));
-    return Map.copyOf(result);
+    return Map.of(
+      "conf", new SpecialFolder(AllIcons.Nodes.ConfigFolder, NodeWeights.CONFIG_FOLDER, "Configuration"),
+      "views", new SpecialFolder(GroovyMvcIcons.Gsp_logo, NodeWeights.VIEWS_FOLDER, "Views"),
+      "init", new SpecialFolder(AllIcons.Nodes.ConfigFolder, NodeWeights.INIT_FOLDER, "Initialization"),
+      "i18n", new SpecialFolder(AllIcons.FileTypes.Properties, NodeWeights.TRANSLATIONS_FOLDER, "Translations"),
+      // grails-forge does not generate grails-app/utils; it survives in the legacy
+      // grails-profiles/web/skeleton (utils/.gitkeep) and is where user Codec classes live.
+      "utils", new SpecialFolder(AllIcons.Nodes.Class, NodeWeights.UTILS_FOLDER, "Utils"),
+      // Default location is overridable via grails.plugin.databasemigration.changelogLocation.
+      "migrations", new SpecialFolder(AllIcons.Nodes.DataSchema, NodeWeights.MIGRATIONS_FOLDER, "Migrations"));
+  }
+
+  private static Map<String, SpecialFolder> assetFolders() {
+    return Map.of(
+      ASSETS_DIR + "/stylesheets", new SpecialFolder(AllIcons.FileTypes.Css, NodeWeights.STYLESHEETS_FOLDER, "Stylesheets"),
+      ASSETS_DIR + "/images", new SpecialFolder(AllIcons.FileTypes.Image, NodeWeights.IMAGES_FOLDER, "Images"),
+      ASSETS_DIR + "/javascripts", new SpecialFolder(AllIcons.FileTypes.JavaScript, NodeWeights.JAVASCRIPTS_FOLDER, "JavaScripts"));
   }
 
   public static boolean shouldShowItem(@NotNull PsiFileSystemItem item) {
@@ -80,5 +100,25 @@ public final class GrailsViewItems {
   public static @Nullable PsiDirectory findAppPsiDirectory(@NotNull GrailsApplication application, @NotNull String name) {
     VirtualFile file = application.getAppRoot().findFileByRelativePath(name);
     return file != null ? PsiManager.getInstance(application.getProject()).findDirectory(file) : null;
+  }
+
+  /**
+   * True if {@code candidate} is a directory the Other sources node does not render, and therefore
+   * must not claim files beneath. Hidden means: a registered special folder under grails-app, or a
+   * registered asset subfolder of grails-app/assets. Deeper directories are never hidden by name —
+   * assets/vendor/jquery-ui/images/ is a real folder of real files and must stay in the tree.
+   */
+  public static boolean isHiddenFromOtherSources(@NotNull VirtualFile appRoot, @NotNull VirtualFile candidate) {
+    String path = VfsUtilCore.getRelativePath(candidate, appRoot, '/');
+    if (path == null) return false;
+    return SPECIAL_GRAILS_APP_FOLDERS.containsKey(path) || SPECIAL_ASSET_FOLDERS.containsKey(path);
+  }
+
+  public static boolean isUnder(@NotNull Set<VirtualFile> directories, @Nullable VirtualFile file) {
+    if (file == null) return false;
+    for (VirtualFile directory : directories) {
+      if (VfsUtilCore.isAncestor(directory, file, false)) return true;
+    }
+    return false;
   }
 }

@@ -129,7 +129,7 @@ is a pure aggregator — it owns only RAT and coverage aggregation, no sources.
 
 | Path | Gradle project | Description |
 |------|----------------|-------------|
-| `plugin/` | `:plugin` | Main plugin: GSP language, Grails project support, run configs. Compiles against the Community Edition API only |
+| `plugin/` | `:plugin` | Main plugin: GSP language, Grails project support, run configs. Compiles against the Community Edition API only. |
 | `pluginModules/{copyright,coverage,database,hibernate,i18n,javaee,jsp,langInjection,maven,spring}/` | `:pluginModules-*` | Optional IntelliJ content modules (`pluginModule` deps). `spring`, `javaee`, `database` and `hibernate` hold the Ultimate-only integrations and are skipped on Community Edition |
 | `libs/gradle-tooling/` | `:libs-gradle-tooling` | Gradle tooling API model builders |
 | `libs/grails-rt/` | `:libs-grails-rt` | Runtime injected into user apps (Java 8) |
@@ -154,6 +154,42 @@ resolves it.
 Special packaging: `plugin/standardDsls/` sits outside the resource roots and is copied to
 `<plugin>/lib/standardDsls/` as loose files by a `PrepareSandboxTask` customization in the
 `intellij-plugin` convention plugin.
+
+## Project view gotchas
+
+`plugin/src/main/java/.../projectView/` builds the Grails pane's tree. The notes below cost real
+time to work out, and none of the pitfalls fail a test that looks like it should catch them.
+
+**Node labels live in `PresentationData`'s coloured fragments, not in `presentableText`.**
+`PsiDirectoryNode.updateImpl` fills the fragment list with the directory name — the *qualified*
+path (`grails-app.i18n`) when the directory is nested — and the renderer draws that list. Setting
+`presentableText` therefore changes nothing visible: the field reads correctly while the tree keeps
+painting the old label. To relabel a node, clear and re-add fragments in
+`GrailsPsiDirectoryNode.postprocess`, which is the only hook that runs after the platform has
+finished writing, on both the updated presentation and the template. Overriding `updateImpl`
+cannot win, because the platform fills the label during that same call.
+
+**Tests must render the way the renderer does, not by calling `updateImpl`.** Asserting straight
+after `updateImpl` checks the *platform's* label, so a test passes while the pane shows the wrong
+text. Run `update()` then read `getPresentation()` — or call `updateImpl` and then `postprocess` —
+and use that helper rather than calling `updateImpl` on its own. A test that passes both with and
+without a labelling fix is not covering it: verify by reverting the fix and watching the test fail.
+Note that `postprocess` is `protected`, so a test outside `…projectView.nodes` must go through
+`update()`; `GrailsNodeProviderTestSupport.rendered(node)` does that and is the helper to reach for.
+
+**The light fixture cannot see any of this.** In light-fixture tests (`GrailsTestCase` and
+subclasses) `createPresentation` is never called, so only the `updateImpl` path is exercised and
+several hooks a real IDE reaches are never touched. Rendering bugs of this shape are verified in a
+running IDE (`./gradlew runIde`, or install the ZIP and restart), not by the suite. Related: the
+Grails pane builds children in a background thread (`isToBuildChildrenInBackground` in
+`GrailsProjectViewPane`), so nodes are built more than once and a node's identity hash changes
+between builds — do not read that as a bug.
+
+`GrailsViewItems.isHiddenFromOtherSources` is the single definition of "hidden from Other sources",
+consulted by both the `assets` child filter and `OtherGrailsAppSourcesNode.contains()`. Two
+independent implementations of that rule is what caused the nested-vendor-asset regression in
+PR 432: the filter hid `assets/vendor/jquery-ui/images/` by name while `contains()` still claimed
+files under it, so *Reveal in Project View* dead-ended.
 
 ## Running & Debugging Tests
 
@@ -222,6 +258,8 @@ Special packaging: `plugin/standardDsls/` sits outside the resource roots and is
 | Wrong JDK / build fails to configure | `sdk env` (JDK pinned in `.sdkmanrc`, no toolchain) |
 | RAT failure on a new file | Add the Apache license header; excludes need a justification |
 | A feature "missing" after switching plugin builds | Rebuild before judging — hit the Gradle refresh icon (or `./gradlew buildPlugin`) so the sandbox picks up the new classes. A stale build can make working code look broken, and the Grails project view pane is the usual tell because it is only added once an application is detected |
+| A project-view node shows the wrong label, or a filter change has no visible effect | Read "Project view gotchas" above before changing anything in `projectView/` — the renderer reads `PresentationData`'s coloured fragments, not `presentableText`, and the light fixture cannot see this class of bug |
+| `sdk env` leaves Gradle on the wrong JDK, or `instrumentCode` fails with `UnsupportedClassVersionError` | `.sdkmanrc` pins a JDK version that may not be installed (e.g. `25.0.3-librca`); `sdk env` then silently keeps the old default. Set `JAVA_HOME` to a matching JDK explicitly |
 
 ## Resources
 

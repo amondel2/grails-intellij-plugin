@@ -23,10 +23,17 @@ import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.projectView.impl.nodes.PsiFileNode;
 import com.intellij.ide.projectView.impl.nodes.PsiFileSystemItemFilter;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
+import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.vfs.VfsUtilCore;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiFileSystemItem;
+import com.intellij.psi.PsiManager;
+import com.intellij.util.PlatformIcons;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.jps.model.module.JpsModuleSourceRootType;
+import org.apache.grails.intellij.plugin.GroovyMvcIcons;
 import org.apache.grails.intellij.plugin.projectView.GrailsPluginsNode;
 import org.apache.grails.intellij.plugin.projectView.NodeWeights;
 import org.apache.grails.intellij.plugin.projectView.api.GrailsViewNodeProvider;
@@ -36,12 +43,26 @@ import org.apache.grails.intellij.plugin.util.version.Version;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import javax.swing.Icon;
 
 public class Grails3NodeProvider implements GrailsViewNodeProvider {
 
   private static final List<String> SPECIAL_FILES = List.of("build.gradle", "settings.gradle", "gradle.properties");
   private static final List<String> SPECIAL_DIRS = List.of("src/main/scripts", "src/main/webapp");
+
+  /**
+   * The built-in Grails 3+ test source roots directly under {@code src}, keyed by the Grails 2 phase
+   * label they were renamed from. Any other lifted root is titled {@code "Tests:" + directoryName}.
+   */
+  private static final Map<String, String> PHASE_TITLES =
+    Map.of("test", "Tests:unit", "integration-test", "Tests:integration", "functional-test", "Tests:functional");
+
+  /** The conventional code source directories of a source root, recognised by the fallback rule below. */
+  private static final Set<String> CODE_SOURCE_DIRS = Set.of("groovy", "java", "kotlin", "scala");
 
   @Override
   public @NotNull Collection<AbstractTreeNode<?>> createNodes(@NotNull GrailsApplication application,
@@ -63,8 +84,28 @@ public class Grails3NodeProvider implements GrailsViewNodeProvider {
 
     PsiDirectory src = GrailsViewItems.findPsiDirectory(application, "src");
     if (src != null) {
-      PsiFileSystemItemFilter filter = item -> !specialDirs.contains(item) && GrailsViewItems.shouldShowItem(item);
+      List<PsiDirectory> testDirs = findTestSourceDirectories(src);
+      // Directories that get their own node, so src can refuse to claim them. PsiDirectoryNode.contains()
+      // applies a node's filter to the file itself only, never to its parent, so hiding the directories
+      // from src is not enough: src would still claim their contents, and Reveal in Project View would
+      // expand src and dead-end. isAncestor(dir, dir, false) is true, so one check covers the directories.
+      Set<VirtualFile> lifted = liftedDirectories(specialDirs, testDirs);
+      PsiFileSystemItemFilter filter = item -> !GrailsViewItems.isUnder(lifted, item.getVirtualFile())
+        && GrailsViewItems.shouldShowItem(item);
       result.add(new GrailsPsiDirectoryNode(src, settings, NodeWeights.SRC_FOLDERS, filter));
+
+      VirtualFile projectRoot = src.getVirtualFile().getParent();
+      for (PsiDirectory testDir : testDirs) {
+        String name = testDir.getName();
+        Icon icon = "test".equals(name) ? PlatformIcons.TEST_SOURCE_FOLDER : GroovyMvcIcons.Grails_test;
+        // Every lifted root weighs TESTS_FOLDER, so two custom phases tie at 0 and their relative order
+        // is unspecified: GrailsNodeComparator returns the weight difference without reaching the
+        // platform comparator. Same class of tie as SRC_FOLDERS under src.
+        result.add(new GrailsPsiDirectoryNode(testDir, settings, icon, NodeWeights.TESTS_FOLDER,
+                                             PHASE_TITLES.getOrDefault(name, "Tests:" + name),
+                                             GrailsViewItems::shouldShowItem,
+                                             VfsUtilCore.getRelativePath(testDir.getVirtualFile(), projectRoot, '/')));
+      }
     }
 
     for (String path : SPECIAL_FILES) {
@@ -75,6 +116,54 @@ public class Grails3NodeProvider implements GrailsViewNodeProvider {
     }
 
     result.add(new GrailsPluginsNode(application.getProject(), settings));
+    return result;
+  }
+
+  /**
+   * Discovers the test source roots to lift out of {@code src}. {@code ProjectFileIndex} is consulted
+   * first, but only as positive evidence: a module registers the whole content root as one SOURCE root,
+   * so it reports a non-test type for every candidate — including in this project's own light fixture —
+   * and on its own would lift nothing. The structural rule below is therefore the heuristic that
+   * carries discovery wherever the module does not register each phase as its own test source root.
+   */
+  private static @NotNull List<PsiDirectory> findTestSourceDirectories(@NotNull PsiDirectory src) {
+    ProjectFileIndex index = ProjectFileIndex.getInstance(src.getProject());
+    List<PsiDirectory> result = new ArrayList<>();
+    for (VirtualFile child : src.getVirtualFile().getChildren()) {
+      if (!child.isDirectory() || !isTestSourceRoot(index, child)) continue;
+      PsiDirectory directory = PsiManager.getInstance(src.getProject()).findDirectory(child);
+      if (directory != null) result.add(directory);
+    }
+    return result;
+  }
+
+  private static boolean isTestSourceRoot(@NotNull ProjectFileIndex index, @NotNull VirtualFile child) {
+    JpsModuleSourceRootType<?> type = index.getContainingSourceRootType(child);
+    if (type != null && type.isForTests()) return true;
+    // src/main is the production root, and a built-in phase is a test root whatever it holds. Any other
+    // child qualifies only on the shape of a Grails source root: it holds a conventional code source
+    // directory, which is what a custom testPhases entry generates.
+    //
+    // This rule assumes every non-main code-source root under src is a phase. A project with a
+    // non-standard production root there (src/legacy/groovy, say) has it lifted out of src and labelled
+    // Tests:legacy. Skipping the rule when the index reports a production root would not help: Gradle
+    // registers the whole content root as one SOURCE root, so the index reports non-test for every
+    // candidate and the rule would stop lifting anything at all.
+    String name = child.getName();
+    if ("main".equals(name)) return false;
+    if (PHASE_TITLES.containsKey(name)) return true;
+    for (VirtualFile grandChild : child.getChildren()) {
+      if (grandChild.isDirectory() && CODE_SOURCE_DIRS.contains(grandChild.getName())) return true;
+    }
+    return false;
+  }
+
+  /** The directories that are rendered as their own node, so {@code src} can refuse to claim them. */
+  private static @NotNull Set<VirtualFile> liftedDirectories(@NotNull List<PsiDirectory> specialDirs,
+                                                             @NotNull List<PsiDirectory> testDirs) {
+    Set<VirtualFile> result = new HashSet<>();
+    for (PsiDirectory directory : specialDirs) result.add(directory.getVirtualFile());
+    for (PsiDirectory directory : testDirs) result.add(directory.getVirtualFile());
     return result;
   }
 }

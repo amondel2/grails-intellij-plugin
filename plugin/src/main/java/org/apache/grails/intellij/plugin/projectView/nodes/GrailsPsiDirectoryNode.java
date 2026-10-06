@@ -25,6 +25,7 @@ import com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode;
 import com.intellij.ide.projectView.impl.nodes.PsiFileSystemItemFilter;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiFileSystemItem;
+import com.intellij.ui.SimpleTextAttributes;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -35,6 +36,7 @@ public class GrailsPsiDirectoryNode extends PsiDirectoryNode {
   private final Icon nodeIcon;
   private final int nodeWeight;
   private final String nodeTitle;
+  private final String nodeLocation;
 
   public GrailsPsiDirectoryNode(@NotNull PsiDirectory directory, @NotNull ViewSettings settings) {
     this(directory, settings, null, 3, null, null);
@@ -65,10 +67,25 @@ public class GrailsPsiDirectoryNode extends PsiDirectoryNode {
                                 int nodeWeight,
                                 @Nullable String nodeTitle,
                                 @Nullable PsiFileSystemItemFilter filter) {
+    this(directory, settings, nodeIcon, nodeWeight, nodeTitle, filter, null);
+  }
+
+  /**
+   * The location is null by default because most nodes show none. {@code OtherGrailsAppSourcesNode} uses the
+   * six-argument constructor, which leaves it null, and the subclass then sets its own in {@code updateImpl}.
+   */
+  public GrailsPsiDirectoryNode(@NotNull PsiDirectory directory,
+                                @NotNull ViewSettings settings,
+                                @Nullable Icon nodeIcon,
+                                int nodeWeight,
+                                @Nullable String nodeTitle,
+                                @Nullable PsiFileSystemItemFilter filter,
+                                @Nullable String nodeLocation) {
     super(directory.getProject(), directory, settings, filter);
     this.nodeIcon = nodeIcon;
     this.nodeWeight = nodeWeight;
     this.nodeTitle = nodeTitle;
+    this.nodeLocation = nodeLocation;
   }
 
   public @Nullable Icon getNodeIcon() {
@@ -83,6 +100,27 @@ public class GrailsPsiDirectoryNode extends PsiDirectoryNode {
   protected void updateImpl(@NotNull PresentationData data) {
     super.updateImpl(data);
     if (nodeIcon != null) data.setIcon(nodeIcon);
-    if (nodeTitle != null) data.setPresentableText(nodeTitle);
+    if (nodeLocation != null) data.setLocationString(nodeLocation);
+  }
+
+  /**
+   * The title is written as a coloured fragment here, not with {@code setPresentableText} in
+   * {@code updateImpl}, because the renderer draws {@code PresentationData}'s fragment list and
+   * {@code PsiDirectoryNode} fills that list with the directory name — the qualified path, such as
+   * {@code grails-app.i18n}, for a nested one. A field write is therefore invisible: the data reads
+   * {@code Tests:unit} while the tree keeps painting {@code test}.
+   *
+   * <p>{@code postprocess} is the only hook that runs after the platform has finished writing the label, on
+   * both the updated presentation and the template, so clearing the fragments and re-adding the title here
+   * is what reaches the renderer. Overriding {@code updateImpl} cannot win, because the platform fills the
+   * label during that same call.
+   */
+  @Override
+  protected void postprocess(@NotNull PresentationData data) {
+    super.postprocess(data);
+    if (nodeTitle == null) return;
+    data.clearText();
+    data.addText(nodeTitle, SimpleTextAttributes.REGULAR_ATTRIBUTES);
+    data.setPresentableText(nodeTitle);
   }
 }

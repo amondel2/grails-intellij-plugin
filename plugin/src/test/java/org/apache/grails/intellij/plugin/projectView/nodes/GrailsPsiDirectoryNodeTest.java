@@ -30,6 +30,7 @@ import org.apache.grails.intellij.lib.testFramework.GrailsTestCase;
 import org.apache.grails.intellij.plugin.projectView.NodeWeights;
 
 import javax.swing.Icon;
+import java.util.List;
 import java.util.Objects;
 
 public class GrailsPsiDirectoryNodeTest extends GrailsTestCase {
@@ -38,11 +39,69 @@ public class GrailsPsiDirectoryNodeTest extends GrailsTestCase {
     GrailsPsiDirectoryNode node = nodeWithCustomPresentation("grails-app/i18n/messages.properties", "Translations",
                                                            AllIcons.FileTypes.Properties, NodeWeights.CONFIG_FOLDER);
 
-    PresentationData data = new PresentationData();
-    node.updateImpl(data);
+    PresentationData data = rendered(node);
 
     assertEquals("Translations", data.getPresentableText());
     assertSame(AllIcons.FileTypes.Properties, data.getIcon(false));
+  }
+
+  /**
+   * The renderer draws {@code PresentationData}'s coloured fragments, and {@code PsiDirectoryNode} fills
+   * them with the directory name. A title written only with {@code setPresentableText} is therefore
+   * invisible: the field reads correctly while the tree keeps painting the directory name. This regression
+   * shipped once — a lifted test root rendered as {@code test} instead of {@code Tests:unit} while its
+   * location string still showed — so the fragment list is what this asserts.
+   */
+  public void testTitleReplacesTheDirectoryNameFragments() {
+    GrailsPsiDirectoryNode node = nodeWithCustomPresentation("grails-app/i18n/messages.properties",
+                                                             "Translations", AllIcons.FileTypes.Properties,
+                                                             NodeWeights.TRANSLATIONS_FOLDER);
+
+    PresentationData data = rendered(node);
+
+    assertEquals("the fragments the renderer draws must be the title alone",
+                 List.of("Translations"), drawnFragments(data));
+  }
+
+  /** An untitled node keeps the platform's own fragments, so nothing is lost by not clearing them. */
+  public void testWithoutCustomPresentationKeepsPlatformFragments() {
+    PsiDirectory directory = findDirectoryCreatedBy("grails-app/views/index.gsp");
+    GrailsPsiDirectoryNode node = new GrailsPsiDirectoryNode(directory, ViewSettings.DEFAULT);
+
+    PresentationData data = rendered(node);
+
+    assertEquals("an untitled node shows the platform's own label",
+                 "grails-app.views", data.getPresentableText());
+    assertTrue("postprocess must not invent a title for an untitled node",
+               drawnFragments(data).stream().noneMatch("Views"::equals));
+  }
+
+  public void testLocationSurvivesAlongsideTheTitle() {
+    PsiDirectory directory = findDirectoryCreatedBy("grails-app/views/index.gsp");
+    GrailsPsiDirectoryNode node = new GrailsPsiDirectoryNode(directory, ViewSettings.DEFAULT, null,
+                                                             NodeWeights.VIEWS_FOLDER, "Views", null,
+                                                             "src/views");
+
+    PresentationData data = rendered(node);
+
+    assertEquals(List.of("Views"), drawnFragments(data));
+    assertEquals("src/views", data.getLocationString());
+  }
+
+  /**
+   * The label is only final after {@code postprocess}, which is the hook that runs on the renderer path.
+   * Asserting straight after {@code updateImpl} checks the platform's label, not ours.
+   */
+  private static @NotNull PresentationData rendered(@NotNull GrailsPsiDirectoryNode node) {
+    PresentationData data = new PresentationData();
+    node.updateImpl(data);
+    node.postprocess(data);
+    return data;
+  }
+
+  /** The fragments the renderer actually draws, after the platform has finished writing the label. */
+  private static @NotNull List<String> drawnFragments(@NotNull PresentationData data) {
+    return data.getColoredText().stream().map(fragment -> fragment.getText()).toList();
   }
 
   public void testWithoutCustomPresentationUsesPlainDirectoryName() {

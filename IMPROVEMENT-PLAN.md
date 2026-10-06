@@ -99,8 +99,10 @@ that Grails 3+ actually uses.
 
 Walk this checklist per app and record works / broken / missing:
 - [ ] Project recognized as Grails; `grails-app/*` project view pane renders
-      controllers/domain/services/taglib/views/conf/i18n/**init**/**utils**/assets
-      groups (init/ and utils/ are conventions the plugin may predate).
+      controllers/domain/services/taglib/views/conf/i18n/**init**/**utils**/migrations/assets
+      groups.
+      **Not walked yet** — the node names these directories render as, and the
+      rendered directory order, are recorded in 2.2.
 - [ ] `Application.groovy` in `grails-app/init/` (extends
       `grails.boot.config.GrailsAutoConfiguration`, runs via `GrailsApp.run`) is
       recognized as the run entry point.
@@ -195,6 +197,24 @@ Detection must work from Gradle dependency data (the plugin already has a
       init,utils,assets}` plus `src/main/groovy`, `src/test/groovy`,
       `src/integration-test/groovy` (registered by `TestPhasesGradlePlugin`) and
       `src/functional-test/groovy` (functional/Geb phase) source sets.
+      **Ground truth (grails-core `8.0.x`, checked 2026-10-01):** the generated web skeleton is
+      `grails-app/{assets,conf,controllers,domain,services,taglib,views}` — so grails-forge's
+      `GrailsApplication` feature writes `grails-app/init/{packagePath}/Application.groovy` and
+      `BootStrap.groovy`, and `init/` **is** generated; `GrailsBase` creates **no**
+      `grails-app/utils`. Both are still worth recognising: `init/` because the Application class
+      lands there, and `utils` because the `grails-profiles/web/skeleton` (whose `base` variant
+      still contributes `grails-app/init/.../Application.groovy`) puts user `*Codec` classes
+      there. `grails-app/migrations` is real and **is** surfaced, but comes from the
+      database-migration plugin rather than the skeleton. **Known gap:** only the default location
+      is honoured — `grails.plugin.databasemigration.changelogLocation` (and its per-datasource
+      variant) can move it, including to an absolute path, and nothing in the plugin reads that
+      setting. Honouring it needs the YAML config work in 2.5 first; until then a moved migrations
+      directory silently falls back to **Other sources**.
+      **Shipped (project view):** `i18n` renders as **Translations**,
+      `assets/{stylesheets,images,javascripts}` as **Stylesheets**/**Images**/**JavaScripts**,
+      `utils` as **Utils**, and `migrations` as **Migrations**. Rendered directory order is
+      **Images, JavaScripts, Stylesheets, Views, Migrations, Translations, Utils, Initialization,
+      Configuration, Other sources**.
 - [ ] `grails-app/conf`: `application.yml` (primary), `application.groovy`,
       `runtime.groovy`, `logback-spring.xml`, `spring/resources.groovy` (bean DSL —
       keep existing support, verify against Boot 3/4 world).
