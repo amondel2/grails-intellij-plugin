@@ -23,6 +23,8 @@ import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.projectView.impl.nodes.PsiFileNode;
 import com.intellij.ide.projectView.impl.nodes.PsiFileSystemItemFilter;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -32,7 +34,7 @@ import com.intellij.psi.PsiFileSystemItem;
 import com.intellij.psi.PsiManager;
 import com.intellij.util.PlatformIcons;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.jps.model.module.JpsModuleSourceRootType;
+import org.jetbrains.annotations.Nullable;
 import org.apache.grails.intellij.plugin.GroovyMvcIcons;
 import org.apache.grails.intellij.plugin.projectView.GrailsPluginsNode;
 import org.apache.grails.intellij.plugin.projectView.NodeWeights;
@@ -60,9 +62,6 @@ public class Grails3NodeProvider implements GrailsViewNodeProvider {
    */
   private static final Map<String, String> PHASE_TITLES =
     Map.of("test", "Tests:unit", "integration-test", "Tests:integration", "functional-test", "Tests:functional");
-
-  /** The conventional code source directories of a source root, recognised by the fallback rule below. */
-  private static final Set<String> CODE_SOURCE_DIRS = Set.of("groovy", "java", "kotlin", "scala");
 
   @Override
   public @NotNull Collection<AbstractTreeNode<?>> createNodes(@NotNull GrailsApplication application,
@@ -120,42 +119,50 @@ public class Grails3NodeProvider implements GrailsViewNodeProvider {
   }
 
   /**
-   * Discovers the test source roots to lift out of {@code src}. {@code ProjectFileIndex} is consulted
-   * first, but only as positive evidence: a module registers the whole content root as one SOURCE root,
-   * so it reports a non-test type for every candidate — including in this project's own light fixture —
-   * and on its own would lift nothing. The structural rule below is therefore the heuristic that
-   * carries discovery wherever the module does not register each phase as its own test source root.
+   * Discovers the test source roots to lift out of {@code src}. A custom phase is a direct child of
+   * {@code src} that holds a registered test source or test resource root. The index is asked about
+   * the registered root itself, never about the directory above it, so a production root registered
+   * under {@code src} ({@code src/generated/java} as SOURCE) is not mistaken for a phase, and a
+   * phase registered as resources only ({@code src/smoke-test/resources} as TEST_RESOURCE) is
+   * still found. The conventional names are the fallback for a phase the module does not register,
+   * which is common before Gradle import.
    */
   private static @NotNull List<PsiDirectory> findTestSourceDirectories(@NotNull PsiDirectory src) {
     ProjectFileIndex index = ProjectFileIndex.getInstance(src.getProject());
+    VirtualFile srcFile = src.getVirtualFile();
+    PsiManager psiManager = PsiManager.getInstance(src.getProject());
     List<PsiDirectory> result = new ArrayList<>();
-    for (VirtualFile child : src.getVirtualFile().getChildren()) {
-      if (!child.isDirectory() || !isTestSourceRoot(index, child)) continue;
-      PsiDirectory directory = PsiManager.getInstance(src.getProject()).findDirectory(child);
-      if (directory != null) result.add(directory);
+    Set<VirtualFile> lifted = new HashSet<>();
+    Module module = index.getModuleForFile(srcFile);
+    if (module != null) {
+      for (VirtualFile root : ModuleRootManager.getInstance(module).getSourceRoots()) {
+        if (!index.isInTestSourceContent(root)) continue;
+        VirtualFile child = directChildOf(srcFile, root);
+        if (child != null && lifted.add(child)) {
+          PsiDirectory directory = psiManager.findDirectory(child);
+          if (directory != null) result.add(directory);
+        }
+      }
+    }
+    for (VirtualFile child : srcFile.getChildren()) {
+      if (child.isDirectory() && PHASE_TITLES.containsKey(child.getName()) && lifted.add(child)) {
+        PsiDirectory directory = psiManager.findDirectory(child);
+        if (directory != null) result.add(directory);
+      }
     }
     return result;
   }
 
-  private static boolean isTestSourceRoot(@NotNull ProjectFileIndex index, @NotNull VirtualFile child) {
-    JpsModuleSourceRootType<?> type = index.getContainingSourceRootType(child);
-    if (type != null && type.isForTests()) return true;
-    // src/main is the production root, and a built-in phase is a test root whatever it holds. Any other
-    // child qualifies only on the shape of a Grails source root: it holds a conventional code source
-    // directory, which is what a custom testPhases entry generates.
-    //
-    // This rule assumes every non-main code-source root under src is a phase. A project with a
-    // non-standard production root there (src/legacy/groovy, say) has it lifted out of src and labelled
-    // Tests:legacy. Skipping the rule when the index reports a production root would not help: Gradle
-    // registers the whole content root as one SOURCE root, so the index reports non-test for every
-    // candidate and the rule would stop lifting anything at all.
-    String name = child.getName();
-    if ("main".equals(name)) return false;
-    if (PHASE_TITLES.containsKey(name)) return true;
-    for (VirtualFile grandChild : child.getChildren()) {
-      if (grandChild.isDirectory() && CODE_SOURCE_DIRS.contains(grandChild.getName())) return true;
+  /** The direct child of {@code src} that contains {@code file}, or null when there is none. */
+  @Nullable
+  private static VirtualFile directChildOf(@NotNull VirtualFile src, @NotNull VirtualFile file) {
+    VirtualFile current = file;
+    while (current != null && !current.equals(src)) {
+      VirtualFile parent = current.getParent();
+      if (parent != null && parent.equals(src)) return current;
+      current = parent;
     }
-    return false;
+    return null;
   }
 
   /** The directories that are rendered as their own node, so {@code src} can refuse to claim them. */

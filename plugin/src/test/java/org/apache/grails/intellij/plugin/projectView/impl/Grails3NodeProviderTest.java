@@ -33,6 +33,10 @@ import com.intellij.util.PlatformIcons;
 import org.apache.grails.intellij.plugin.GroovyMvcIcons;
 import org.apache.grails.intellij.plugin.projectView.NodeWeights;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsPsiDirectoryNode;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.jps.model.java.JavaResourceRootType;
+import org.jetbrains.jps.model.java.JavaSourceRootType;
+import org.jetbrains.jps.model.module.JpsModuleSourceRootType;
 
 import java.io.IOException;
 import java.lang.reflect.Proxy;
@@ -119,6 +123,8 @@ public class Grails3NodeProviderTest extends GrailsNodeProviderTestSupport {
     myFixture.addFileToProject("src/test/groovy/SomeServiceSpec.groovy", "class SomeServiceSpec {}");
     myFixture.addFileToProject("src/smoke-test/groovy/SomeSmokeIT.groovy", "class SomeSmokeIT {}");
     myFixture.addFileToProject("src/integration-test-cli/groovy/SomeCliIT.groovy", "class SomeCliIT {}");
+    registerSourceFolder("src/smoke-test/groovy", JavaSourceRootType.TEST_SOURCE);
+    registerSourceFolder("src/integration-test-cli/groovy", JavaSourceRootType.TEST_SOURCE);
 
     Collection<AbstractTreeNode<?>> nodes =
       new Grails3NodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT);
@@ -141,8 +147,9 @@ public class Grails3NodeProviderTest extends GrailsNodeProviderTestSupport {
   }
 
   /**
-   * Discovery lifts any direct child of src that holds a conventional code source directory, so a
-   * folder that holds none of them — whatever it is called — stays inside the src node.
+   * Discovery lifts a direct child of src only when the module registers a test source or test
+   * resource root beneath it, so a folder with no registered roots — whatever it is called — stays
+   * inside the src node.
    */
   public void testSrcChildWithoutACodeSourceDirectoryStaysUnderSrc() {
     myFixture.addFileToProject("src/main/groovy/SomeService.groovy", "class SomeService {}");
@@ -175,6 +182,91 @@ public class Grails3NodeProviderTest extends GrailsNodeProviderTestSupport {
                findNode(nodes, "docs"));
     assertNull("a src child holding no code source directory must not be lifted to a top-level node",
                findNode(nodes, "assets"));
+  }
+
+  /**
+   * A production source root registered under {@code src} is not a test phase, however much it looks
+   * like one: the index is asked about the registered root itself, so {@code src/generated/java}
+   * registered as SOURCE leaves the directory where it is.
+   */
+  public void testProductionSourceRootUnderSrcIsNotLifted() {
+    myFixture.addFileToProject("src/main/groovy/SomeService.groovy", "class SomeService {}");
+    myFixture.addFileToProject("src/generated/java/GeneratedClient.java", "class GeneratedClient {}");
+    registerSourceFolder("src/generated/java", JavaSourceRootType.SOURCE);
+
+    Collection<AbstractTreeNode<?>> nodes =
+      new Grails3NodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT);
+
+    assertNull("a production root registered under src must not be lifted to a top-level node",
+               findNode(nodes, "generated"));
+
+    GrailsPsiDirectoryNode srcNode = findNode(nodes, "src");
+    assertNotNull("src node must be present", srcNode);
+    PsiDirectory generatedDir = srcNode.getValue().findSubdirectory("generated");
+    assertNotNull(generatedDir);
+    assertTrue("a production root registered under src stays visible under src",
+               srcNode.getFilter().shouldShow(generatedDir));
+    assertTrue("src keeps claiming files under a production root it does not lift",
+               srcNode.contains(myFixture.findFileInTempDir("src/generated/java/GeneratedClient.java")));
+  }
+
+  /**
+   * A custom phase registered as a test resource root, holding no Groovy or Java directory, is
+   * still a phase: the registered root maps to the direct child of {@code src} that contains it.
+   */
+  public void testCustomPhaseRegisteredAsTestResourcesIsLifted() {
+    myFixture.addFileToProject("src/main/groovy/SomeService.groovy", "class SomeService {}");
+    myFixture.addFileToProject("src/smoke-test/resources/smoke.properties", "k=v");
+    registerSourceFolder("src/smoke-test/resources", JavaResourceRootType.TEST_RESOURCE);
+
+    Collection<AbstractTreeNode<?>> nodes =
+      new Grails3NodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT);
+
+    GrailsPsiDirectoryNode smokeTest = findNode(nodes, "smoke-test");
+    assertNotNull("a phase registered as test resources must be lifted out of src", smokeTest);
+    assertTitleAndLocation(smokeTest, "Tests:smoke-test", "src/smoke-test");
+
+    GrailsPsiDirectoryNode srcNode = findNode(nodes, "src");
+    assertNotNull("src node must be present", srcNode);
+    assertFalse("a lifted phase must not duplicate under src",
+                srcNode.getFilter().shouldShow(srcNode.getValue().findSubdirectory("smoke-test")));
+    assertFalse("src must not claim a file under a lifted phase, or reveal dead-ends",
+                srcNode.contains(myFixture.findFileInTempDir("src/smoke-test/resources/smoke.properties")));
+  }
+
+  /**
+   * A test source root registered as a direct child of {@code src} — not a grandchild like
+   * {@code src/test/groovy} — is still lifted: the root itself is the direct child.
+   */
+  public void testTestSourceRootRegisteredAsDirectChildOfSrcIsLifted() {
+    myFixture.addFileToProject("src/main/groovy/SomeService.groovy", "class SomeService {}");
+    myFixture.addFileToProject("src/test/SomeServiceSpec.groovy", "class SomeServiceSpec {}");
+    registerSourceFolder("src/test", JavaSourceRootType.TEST_SOURCE);
+
+    Collection<AbstractTreeNode<?>> nodes =
+      new Grails3NodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT);
+
+    GrailsPsiDirectoryNode testNode = findNode(nodes, "test");
+    assertNotNull("a test source root registered as a direct child of src must be lifted", testNode);
+    assertTitleAndLocation(testNode, "Tests:unit", "src/test");
+
+    GrailsPsiDirectoryNode srcNode = findNode(nodes, "src");
+    assertNotNull("src node must be present", srcNode);
+    assertFalse("a lifted phase must not duplicate under src",
+                srcNode.getFilter().shouldShow(srcNode.getValue().findSubdirectory("test")));
+    assertFalse("src must not claim a file under a lifted phase, or reveal dead-ends",
+                srcNode.contains(myFixture.findFileInTempDir("src/test/SomeServiceSpec.groovy")));
+  }
+
+  /** Registers {@code path} as a source root of the given type, the way Gradle import would. */
+  private void registerSourceFolder(@NotNull String path, @NotNull JpsModuleSourceRootType<?> rootType) {
+    VirtualFile dir = myFixture.findFileInTempDir(path);
+    assertNotNull(path + " must exist", dir);
+    ModuleRootModificationUtil.updateModel(getModule(), model -> {
+      for (ContentEntry entry : model.getContentEntries()) {
+        entry.addSourceFolder(dir, rootType);
+      }
+    });
   }
 
   public void testTestRootThePlatformCannotResolveGetsNoNode() throws IOException {
