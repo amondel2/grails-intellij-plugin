@@ -22,18 +22,25 @@ package org.apache.grails.intellij.plugin.domain;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiMethod;
+import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.testFramework.UsefulTestCase;
+import groovy.lang.Closure;
 import org.apache.grails.intellij.lib.testFramework.GrailsTestCase;
 import org.jetbrains.plugins.groovy.codeInspection.untypedUnresolvedAccess.GrUnresolvedAccessInspection;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.GrField;
+import org.jetbrains.plugins.groovy.lang.psi.api.statements.blocks.GrClosableBlock;
+import org.jetbrains.plugins.groovy.lang.resolve.delegatesTo.DelegatesToInfo;
+import org.jetbrains.plugins.groovy.lang.resolve.delegatesTo.GrDelegatesToUtilKt;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
- * Where queries ({@code Person.where { active == true }}) refer to the domain properties by their bare names. The
- * GORM 5+ {@code GormEntity} trait only gives the closure a raw {@code DetachedCriteria} delegate, so those names
- * are resolved by WhereQueryClosureMemberContributor. The GORM the other tests run against is older than that,
- * hence the stubs below.
+ * Where queries ({@code Person.where { active == true }}) refer to the domain properties by their bare names, which
+ * WhereQueryClosureMemberContributor resolves, and call the criteria methods ({@code setAlias}, {@code eq}) of the
+ * {@code DetachedCriteria} GORM runs them against. The GORM 4+ {@code GormEntity} trait declares no
+ * {@code @DelegatesTo} for that, so DetachedCriteriaDelegatesToProvider supplies the delegate. The GORM the other
+ * tests run against is older than that, hence the stubs below.
  */
 public class GormWhereQueryTest extends GrailsTestCase {
   private PsiFile myDomainFile;
@@ -48,14 +55,39 @@ public class GormWhereQueryTest extends GrailsTestCase {
   protected void setUp() throws Exception {
     super.setUp();
 
+    // #CHECK# org.grails.datastore.mapping.query.api.Criteria
+    myFixture.addFileToProject("src/groovy/org/grails/datastore/mapping/query/api/Criteria.groovy", """
+      package org.grails.datastore.mapping.query.api
+
+      interface Criteria {
+      }
+      """);
+
+    // #CHECK# org.grails.datastore.gorm.query.criteria.AbstractDetachedCriteria
+    myFixture.addFileToProject("src/groovy/org/grails/datastore/gorm/query/criteria/AbstractDetachedCriteria.groovy", """
+      package org.grails.datastore.gorm.query.criteria
+
+      import org.grails.datastore.mapping.query.api.Criteria
+
+      abstract class AbstractDetachedCriteria<T> implements Criteria {
+        Criteria setAlias(String alias) { this }
+        Criteria eq(String propertyName, Object value) { this }
+        Criteria or(@DelegatesTo(AbstractDetachedCriteria) Closure callable) { this }
+      }
+      """);
+
+    // #CHECK# grails.gorm.DetachedCriteria
     myFixture.addFileToProject("src/groovy/grails/gorm/DetachedCriteria.groovy", """
       package grails.gorm
 
-      class DetachedCriteria<T> {
+      import org.grails.datastore.gorm.query.criteria.AbstractDetachedCriteria
+
+      class DetachedCriteria<T> extends AbstractDetachedCriteria<T> {
         DetachedCriteria(Class<T> targetClass) {}
         DetachedCriteria<T> build(@DelegatesTo(DetachedCriteria) Closure callable) { this }
         DetachedCriteria<T> where(@DelegatesTo(DetachedCriteria) Closure callable) { this }
         DetachedCriteria<T> eq(String propertyName, Object value) { this }
+        DetachedCriteria<T> or(@DelegatesTo(AbstractDetachedCriteria) Closure callable) { this }
         List<T> list(Map args) { null }
       }
       """);
@@ -76,17 +108,19 @@ public class GormWhereQueryTest extends GrailsTestCase {
       }
       """);
 
-    // #CHECK# org.grails.datastore.gorm.GormEntity
+    // #CHECK# org.grails.datastore.gorm.GormEntity: as in GORM 6.1 to 8, the closures carry no @DelegatesTo.
     myFixture.addFileToProject("src/groovy/org/grails/datastore/gorm/GormEntity.groovy", """
       package org.grails.datastore.gorm
 
       import grails.gorm.DetachedCriteria
 
       trait GormEntity<D> {
-        static DetachedCriteria<D> where(@DelegatesTo(DetachedCriteria) Closure callable) { null }
-        static DetachedCriteria<D> whereAny(@DelegatesTo(DetachedCriteria) Closure callable) { null }
-        static D find(@DelegatesTo(DetachedCriteria) Closure callable) { null }
-        static List<D> findAll(@DelegatesTo(DetachedCriteria) Closure callable) { null }
+        static DetachedCriteria<D> where(Closure callable) { null }
+        static DetachedCriteria<D> whereAny(Closure callable) { null }
+        static DetachedCriteria<D> whereLazy(Closure callable) { null }
+        static D find(Closure callable) { null }
+        static List<D> findAll(Closure callable) { null }
+        static List<D> findAll(Map args, Closure callable) { null }
       }
       """);
 
@@ -202,8 +236,99 @@ public class GormWhereQueryTest extends GrailsTestCase {
 
     List<String> variants = myFixture.getLookupElementStrings();
     assertNotNull(variants);
-    assertContainsElements(variants, "name", "age", "active", "id", "version");
+    assertContainsElements(variants, "name", "age", "active", "id", "version", "setAlias", "eq", "or");
     assertDoesntContain(variants, "nickname");
+  }
+
+  /**
+   * GORM runs each of these closures against a {@code DetachedCriteria} of the queried class, delegate first
+   * ({@code GormStaticApi#where}), not against the {@code Criteria} interface its methods are declared to return.
+   */
+  public void testWhereQueryDelegatesToDetachedCriteriaOfQueriedClass() {
+    PsiFile file = myFixture.addFileToProject("src/groovy/PersonService.groovy", """
+      class PersonService {
+        def search() {
+          Person.where {}
+          Person.whereAny {}
+          Person.whereLazy {}
+          Person.find {}
+          Person.findAll {}
+          Person.findAll([max: 1]) {}
+          Person.where({})
+        }
+      }
+      """);
+
+    Collection<GrClosableBlock> closures = PsiTreeUtil.findChildrenOfType(file, GrClosableBlock.class);
+    assertEquals(7, closures.size());
+    for (GrClosableBlock closure : closures) {
+      assertDelegatesToPersonCriteria(closure);
+    }
+
+    // An unqualified call from within the domain class itself.
+    PsiElement inDomain = myDomainFile.findElementAt(myDomainFile.getText().indexOf("age >= 18"));
+    assertDelegatesToPersonCriteria(PsiTreeUtil.getParentOfType(inDomain, GrClosableBlock.class));
+  }
+
+  /** The reported case: the criteria methods neither resolved nor completed in a where query. */
+  public void testCriteriaMethodsResolveInWhereQueries() {
+    PsiFile file = myFixture.addFileToProject("src/groovy/PersonService.groovy", """
+      import groovy.transform.CompileStatic
+
+      @CompileStatic
+      class PersonService {
+        def search() {
+          Person.where { setAlias('p'); eq('name', 'Ann'); or { eq('age', 1) } }
+          Person.whereAny { setAlias('p') }
+          Person.whereLazy { setAlias('p') }
+          Person.find { setAlias('p') }
+          Person.findAll { setAlias('p') }
+          Person.findAll([max: 1]) { setAlias('p') }
+        }
+      }
+      """);
+    myFixture.configureFromExistingVirtualFile(file.getVirtualFile());
+    myFixture.checkHighlighting(true, false, true);
+  }
+
+  public void testNavigateToCriteriaMethod() {
+    PsiFile file = myFixture.addFileToProject("src/groovy/PersonService.groovy", """
+      class PersonService {
+        def search() {
+          Person.where { setAl<caret>ias('p') }
+        }
+      }
+      """);
+    myFixture.configureFromExistingVirtualFile(file.getVirtualFile());
+
+    PsiElement target = myFixture.getElementAtCaret();
+    UsefulTestCase.assertInstanceOf(target, PsiMethod.class);
+    assertEquals("org.grails.datastore.gorm.query.criteria.AbstractDetachedCriteria",
+                 ((PsiMethod)target).getContainingClass().getQualifiedName());
+  }
+
+  /** Only the GORM where query methods of a domain class get the delegate, not same-named methods of anything else. */
+  public void testNoCriteriaDelegateOutsideWhereQueries() {
+    PsiFile file = myFixture.addFileToProject("src/groovy/PersonService.groovy", """
+      class Finder {
+        static Object where(Closure callable) { null }
+      }
+
+      class PersonService {
+        def search(List<String> names) {
+          names.find {}
+          names.findAll {}
+          Finder.where {}
+        }
+      }
+      """);
+
+    Collection<GrClosableBlock> closures = PsiTreeUtil.findChildrenOfType(file, GrClosableBlock.class);
+    assertEquals(3, closures.size());
+    for (GrClosableBlock closure : closures) {
+      DelegatesToInfo info = GrDelegatesToUtilKt.getDelegatesToInfo(closure);
+      assertTrue(closure.getParent().getText(), info == null || !info.getTypeToDelegate().getCanonicalText().startsWith("grails.gorm"));
+    }
   }
 
   public void testNavigateToDomainProperty() {
@@ -325,6 +450,13 @@ public class GormWhereQueryTest extends GrailsTestCase {
       """);
     myFixture.configureFromExistingVirtualFile(file.getVirtualFile());
     myFixture.checkHighlighting(true, false, true);
+  }
+
+  private static void assertDelegatesToPersonCriteria(GrClosableBlock closure) {
+    DelegatesToInfo info = GrDelegatesToUtilKt.getDelegatesToInfo(closure);
+    assertNotNull(closure.getParent().getText(), info);
+    assertEquals(closure.getParent().getText(), "grails.gorm.DetachedCriteria<Person>", info.getTypeToDelegate().getCanonicalText());
+    assertEquals(Closure.DELEGATE_FIRST, info.getStrategy());
   }
 
   private void assertNavigatesToField(String serviceText, String fieldName) {
