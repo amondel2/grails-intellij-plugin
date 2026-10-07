@@ -19,8 +19,15 @@
 
 package org.apache.grails.intellij.plugin.domain;
 
+import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiMethod;
+import com.intellij.psi.util.PsiTreeUtil;
 import org.apache.grails.intellij.lib.testFramework.GrailsTestCase;
+import org.jetbrains.plugins.groovy.lang.psi.api.statements.blocks.GrClosableBlock;
+import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrReferenceExpression;
+import org.jetbrains.plugins.groovy.lang.psi.impl.synthetic.GrLightMethodBuilder;
+import org.jetbrains.plugins.groovy.lang.resolve.delegatesTo.GrDelegatesToUtilKt;
 
 public class GormDetachedCriteriaTest extends GrailsTestCase {
   @Override
@@ -157,6 +164,34 @@ public class GormDetachedCriteriaTest extends GrailsTestCase {
                               println(d.firstName)
                             }
                             """);
+  }
+
+  /**
+   * Below GORM 4 {@code where} is a light dynamic method, whose closure gets the criteria methods from
+   * DetachedCriteriaClosureMemberProvider. The delegate GORM 4+ where queries get must not be added on top.
+   */
+  public void testLightWhereMethodKeepsClosureMembers() {
+    addDomain("""
+                
+                class Ddd {
+                  String name
+                }
+                """);
+
+    PsiFile file = configureBySimpleGroovyFile("""
+                                                 
+                                                 Ddd.where {
+                                                   e<caret>q "name", "Ivan"
+                                                 }
+                                                 """);
+
+    GrClosableBlock closure = PsiTreeUtil.findChildOfType(file, GrClosableBlock.class);
+    assertNull(GrDelegatesToUtilKt.getDelegatesToInfo(closure));
+
+    PsiElement leaf = file.findElementAt(myFixture.getCaretOffset());
+    PsiElement target = PsiTreeUtil.getParentOfType(leaf, GrReferenceExpression.class).resolve();
+    assertInstanceOf(target, GrLightMethodBuilder.class);
+    assertEquals("grails.gorm.DetachedCriteria", ((PsiMethod)target).getContainingClass().getQualifiedName());
   }
 
   public void testResolveDynamicFinderMethod() {

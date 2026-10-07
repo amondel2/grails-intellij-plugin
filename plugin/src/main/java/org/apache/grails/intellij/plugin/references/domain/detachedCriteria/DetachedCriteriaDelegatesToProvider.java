@@ -18,12 +18,15 @@
  */
 package org.apache.grails.intellij.plugin.references.domain.detachedCriteria;
 
+import com.intellij.psi.PsiClass;
+import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiType;
 import com.intellij.util.ProcessingContext;
 import groovy.lang.Closure;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.plugins.groovy.lang.psi.api.GrFunctionalExpression;
+import org.jetbrains.plugins.groovy.lang.psi.api.statements.blocks.GrClosableBlock;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrCall;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrExpression;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrMethodCall;
@@ -48,7 +51,9 @@ public final class DetachedCriteriaDelegatesToProvider implements GrDelegatesToP
   @Override
   public @Nullable DelegatesToInfo getDelegatesToInfo(@NotNull GrFunctionalExpression expression) {
     ProcessingContext context = new ProcessingContext();
-    if (!CLOSURE_PATTERN.accepts(expression, context)) return null;
+    if (!CLOSURE_PATTERN.accepts(expression, context)) {
+      return expression instanceof GrClosableBlock closure ? getDomainWhereQueryDelegate(closure) : null;
+    }
     GrCall call = context.get(GroovyPatternsKt.getClosureCallKey());
     if (!(call instanceof GrMethodCall methodCall)) return null;
     if (!(methodCall.getInvokedExpression() instanceof GrReferenceExpression referenceExpression)) return null;
@@ -57,5 +62,27 @@ public final class DetachedCriteriaDelegatesToProvider implements GrDelegatesToP
     PsiType type = qualifier.getType();
     if (type == null) return null;
     return new DelegatesToInfo(type, Closure.DELEGATE_FIRST);
+  }
+
+  /**
+   * {@code Person.where { ... }} and the other where queries started on a domain class. From GORM 4 on they come from
+   * the {@code GormEntity} trait, whose {@code where(Closure)} declares no {@code @DelegatesTo}, although GORM runs the
+   * closure against a {@code DetachedCriteria<Person>}, delegate first ({@code GormStaticApi#where}). Without this the
+   * criteria methods ({@code setAlias}, {@code eq}, {@code or}, ...) neither resolve nor complete in the closure.
+   * Below GORM 4 those methods are light methods, whose closures get the criteria methods from
+   * {@link DetachedCriteriaClosureMemberProvider} instead.
+   */
+  private static @Nullable DelegatesToInfo getDomainWhereQueryDelegate(@NotNull GrClosableBlock closure) {
+    GrMethodCall call = DetachedCriteriaUtil.getWhereQueryCall(closure);
+    if (call == null) return null;
+
+    PsiMethod method = call.resolveMethod();
+    if (method == null || !DetachedCriteriaUtil.isGormEntityWhereQueryMethod(method)) return null;
+
+    PsiClass domainClass = DetachedCriteriaUtil.getWhereQueryDomainClass(call);
+    if (domainClass == null) return null;
+
+    PsiType type = DetachedCriteriaUtil.createDetachedCriteriaType(domainClass, closure);
+    return type == null ? null : new DelegatesToInfo(type, Closure.DELEGATE_FIRST);
   }
 }
