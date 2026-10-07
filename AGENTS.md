@@ -167,8 +167,11 @@ with the name from `ProjectViewDirectoryHelper.getNodeName`, which can be qualif
 Gradle's per-source-set modules make `src/test` a module content root, so its label can be
 `test [app.test]` in fragments. The renderer prefers a non-empty fragment list over `presentableText`;
 setting only the latter to `Tests:unit` leaves the content-root label visible.
-`GrailsPsiDirectoryNode.postprocess` replaces any fragments and sets `presentableText` on both
-the updated presentation and the template, keeping custom titles consistent for both kinds of directory.
+`GrailsPsiDirectoryNode.postprocess` replaces any fragments and sets `presentableText`, keeping custom
+titles consistent for both kinds of directory. That hook is a choice, not a requirement: the platform has
+written the label by the time either hook's body runs, since `super.updateImpl` is the first statement of
+the override, so clearing the fragments in `updateImpl` works equally well. Do not reason about the two
+hooks as if one were earlier.
 
 **Tests must include `postprocess` and inspect the fragments when present.** Run `update()` then
 read `getPresentation()` — or call `updateImpl` and then `postprocess` — to see the final custom title.

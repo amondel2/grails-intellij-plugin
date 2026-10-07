@@ -110,9 +110,11 @@ public class GrailsPsiDirectoryNode extends PsiDirectoryNode {
    * {@code test [app.test]}. The renderer prefers those fragments over {@code presentableText}, so
    * setting only the latter to {@code Tests:unit} does not change that content-root label.
    *
-   * <p>{@code postprocess} applies the custom title to both the updated presentation and the template.
-   * Replacing any platform fragments and setting {@code presentableText} keeps the title consistent
-   * for both content roots and ordinary directories.
+   * <p>Replacing any platform fragments and setting {@code presentableText} keeps the title consistent
+   * for both content roots and ordinary directories. Note that {@code postprocess} is not what makes this
+   * possible: the platform has already written the label by the time either hook's body runs, since
+   * {@code super.updateImpl} is the first statement of the override, so clearing the fragments in
+   * {@code updateImpl} works equally well.
    */
   @Override
   protected void postprocess(@NotNull PresentationData data) {
