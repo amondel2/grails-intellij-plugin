@@ -173,7 +173,7 @@ setting only the latter to `Tests:unit` leaves the content-root label visible.
 titles consistent for both kinds of directory. `postprocess` itself is a choice rather than a requirement:
 the platform has written the label by the time either hook's body runs, because `super.updateImpl` is the
 first statement of the override, so clearing the fragments in `updateImpl` would work equally well. Do not
-reason about the two hooks as if one were earlier.
+treat `updateImpl` as too early: `super.updateImpl` writes the label before the rest of the override runs.
 
 **Tests must include `postprocess` and inspect the fragments when present.** Run `update()` then
 read `getPresentation()` — or call `updateImpl` and then `postprocess` — to see the final custom title.
