@@ -129,7 +129,7 @@ is a pure aggregator — it owns only RAT and coverage aggregation, no sources.
 
 | Path | Gradle project | Description |
 |------|----------------|-------------|
-| `plugin/` | `:plugin` | Main plugin: GSP language, Grails project support, run configs. Compiles against the Community Edition API only |
+| `plugin/` | `:plugin` | Main plugin: GSP language, Grails project support, run configs. Compiles against the Community Edition API only. |
 | `pluginModules/{copyright,coverage,database,hibernate,i18n,javaee,jsp,langInjection,maven,spring}/` | `:pluginModules-*` | Optional IntelliJ content modules (`pluginModule` deps). `spring`, `javaee`, `database` and `hibernate` hold the Ultimate-only integrations and are skipped on Community Edition |
 | `libs/gradle-tooling/` | `:libs-gradle-tooling` | Gradle tooling API model builders |
 | `libs/grails-rt/` | `:libs-grails-rt` | Runtime injected into user apps (Java 8) |
@@ -154,6 +154,45 @@ resolves it.
 Special packaging: `plugin/standardDsls/` sits outside the resource roots and is copied to
 `<plugin>/lib/standardDsls/` as loose files by a `PrepareSandboxTask` customization in the
 `intellij-plugin` convention plugin.
+
+## Project view gotchas
+
+`plugin/src/main/java/.../projectView/` builds the Grails pane's tree. Label tests need to cover
+both ordinary directories and module content roots, which the platform presents differently.
+
+**Module content-root labels use coloured fragments; ordinary directories use `presentableText`.**
+In platform 262.10315.125, `PsiDirectoryNode.updateImpl` adds coloured fragments only when
+`ProjectRootsUtil.isModuleContentRoot` is true. For other directories it calls `setPresentableText`
+with the name from `ProjectViewDirectoryHelper.getNodeName`, which can be qualified (`grails-app.i18n`).
+Gradle's per-source-set modules make `src/test` a module content root, so its label can be
+`test [app.test]` in fragments. The renderer prefers a non-empty fragment list over `presentableText`;
+setting only the latter to `Tests:unit` leaves the content-root label visible.
+`GrailsPsiDirectoryNode.postprocess` replaces any fragments and sets `presentableText` on both
+the updated presentation and the template, keeping custom titles consistent for both kinds of directory.
+
+**Tests must include `postprocess` and inspect the fragments when present.** Run `update()` then
+read `getPresentation()` — or call `updateImpl` and then `postprocess` — to see the final custom title.
+Asserting only `presentableText` misses a stale fragment list that the renderer would prefer.
+A test that passes both with and without a labelling fix is not covering it: verify by reverting
+the fix and watching the test fail.
+Note that `postprocess` is `protected`, so a test outside `…projectView.nodes` must go through
+`update()`; `GrailsNodeProviderTestSupport.rendered(node)` does that and is the helper to reach for.
+
+**Light fixtures can reproduce content-root labels when the directory is registered accordingly.**
+Use `ModuleRootModificationUtil.updateModel(module, model -> model.addContentEntry(dir))` to make
+the directory a module content root. Assert that `updateImpl` produces platform fragments before
+`postprocess`, then that the custom title replaces them. An ordinary `grails-app/i18n` directory
+has no platform fragments to replace and does not reproduce the test-root bug.
+`GrailsPsiDirectoryNodeTest` covers both cases, including preservation of fragments on untitled nodes.
+Related: the Grails pane builds children in a background thread (`isToBuildChildrenInBackground` in
+`GrailsProjectViewPane`), so nodes are built more than once and a node's identity hash changes
+between builds — do not read that as a bug.
+
+`GrailsViewItems.isHiddenFromOtherSources` is the single definition of "hidden from Other sources",
+consulted by both the `assets` child filter and `OtherGrailsAppSourcesNode.contains()`. Two
+independent implementations of that rule is what caused the nested-vendor-asset regression in
+PR 432: the filter hid `assets/vendor/jquery-ui/images/` by name while `contains()` still claimed
+files under it, so *Reveal in Project View* dead-ended.
 
 ## Running & Debugging Tests
 
@@ -222,6 +261,8 @@ Special packaging: `plugin/standardDsls/` sits outside the resource roots and is
 | Wrong JDK / build fails to configure | `sdk env` (JDK pinned in `.sdkmanrc`, no toolchain) |
 | RAT failure on a new file | Add the Apache license header; excludes need a justification |
 | A feature "missing" after switching plugin builds | Rebuild before judging — hit the Gradle refresh icon (or `./gradlew buildPlugin`) so the sandbox picks up the new classes. A stale build can make working code look broken, and the Grails project view pane is the usual tell because it is only added once an application is detected |
+| A project-view node shows the wrong label, or a filter change has no visible effect | Read "Project view gotchas" above before changing anything in `projectView/` — module content-root labels use coloured fragments that take precedence over `presentableText`; light-fixture coverage must register a content entry to exercise that case |
+
 
 ## Resources
 

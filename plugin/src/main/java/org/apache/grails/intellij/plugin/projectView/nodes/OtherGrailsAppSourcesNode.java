@@ -96,7 +96,15 @@ public class OtherGrailsAppSourcesNode extends GrailsPsiDirectoryNode {
     for (VirtualFile dir : otherDirs) {
       PsiDirectory directory = manager.findDirectory(dir);
       if (directory != null) {
-        result.add(new PsiDirectoryNode(project, directory, getSettings()));
+        if (GrailsViewItems.ASSETS_DIR.equals(dir.getName())) {
+          VirtualFile appRoot = application.getAppRoot();
+          result.add(new PsiDirectoryNode(project, directory, getSettings(), item -> {
+            VirtualFile itemFile = item.getVirtualFile();
+            return itemFile == null || !GrailsViewItems.isHiddenFromOtherSources(appRoot, itemFile);
+          }));
+        } else {
+          result.add(new PsiDirectoryNode(project, directory, getSettings()));
+        }
       }
     }
     return result;
@@ -106,7 +114,21 @@ public class OtherGrailsAppSourcesNode extends GrailsPsiDirectoryNode {
   public boolean contains(@NotNull VirtualFile file) {
     if (!super.contains(file)) return false;
     PsiFile psiFile = PsiManager.getInstance(Objects.requireNonNull(getProject())).findFile(file);
-    return psiFile != null && GrailsViewItems.shouldShowItem(psiFile);
+    return psiFile != null && GrailsViewItems.shouldShowItem(psiFile) && !isUnderHiddenChildDirectory(file);
+  }
+
+  /**
+   * Returning false for files under a directory this node does not render is what keeps
+   * {@code Reveal in Project View} from expanding this node and dead-ending on a filtered-out child.
+   * Testing every ancestor rather than each direct child of {@code grails-app} or {@code assets} is
+   * what removes the depth limit, so the walk shares the filter's predicate.
+   */
+  private boolean isUnderHiddenChildDirectory(@NotNull VirtualFile file) {
+    VirtualFile appRoot = Objects.requireNonNull(getValue()).getVirtualFile();
+    for (VirtualFile ancestor = file.getParent(); ancestor != null && !ancestor.equals(appRoot); ancestor = ancestor.getParent()) {
+      if (GrailsViewItems.isHiddenFromOtherSources(appRoot, ancestor)) return true;
+    }
+    return false;
   }
 
   @Override

@@ -5,6 +5,10 @@ GSP language support (parsing, highlighting, completion, refactoring), Grails pr
 structure and navigation, run configurations, taglib/domain-class support, and
 integrations for i18n, coverage, Hibernate, Maven, and language injection.
 
+The Grails project view pane gives `grails-app/` dedicated **Stylesheets**, **Images**,
+**JavaScripts**, **Migrations**, **Translations** and **Utils** nodes, and lifts the test
+source roots out of `src` as **Tests:unit**, **Tests:integration** and **Tests:functional**.
+
 The plugin runs on IntelliJ IDEA Ultimate and, with a reduced feature set, on IntelliJ IDEA
 Community Edition 2026.2+ (see [CE-SUPPORT.md](CE-SUPPORT.md)).
 
@@ -19,8 +23,11 @@ at commit
 
 To **run** the plugin:
 
-- IntelliJ IDEA **Ultimate** 2026.2.2+ (`sinceBuild` 262.10315.125). The plugin depends on Ultimate-only
-  functionality (JavaEE, Spring, database, microservices) and will not load in Community.
+- IntelliJ IDEA **Ultimate** 2026.2.2+ (`sinceBuild` 262.10315.125) for the full feature set, or
+  IntelliJ IDEA **Community Edition** 2026.2+ for the reduced one. The plugin loads on Community:
+  every Ultimate-only integration lives in a content module that the platform skips when its
+  dependencies are absent, so the main jar compiles against the Community API only. See
+  [CE-SUPPORT.md](CE-SUPPORT.md) for exactly which features are missing.
 
 To **build** the plugin:
 

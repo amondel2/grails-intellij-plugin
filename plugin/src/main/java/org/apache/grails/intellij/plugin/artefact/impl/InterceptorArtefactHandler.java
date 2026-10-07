@@ -59,7 +59,7 @@ public final class InterceptorArtefactHandler implements GrailsDisplayableArtefa
 
   @Override
   public int getWeight() {
-    return NodeWeights.CONTROLLERS_FOLDER + 1;
+    return NodeWeights.INTERCEPTORS_FOLDER;
   }
 
   @Override
