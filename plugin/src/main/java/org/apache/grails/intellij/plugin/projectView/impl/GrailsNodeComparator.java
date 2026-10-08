@@ -29,6 +29,7 @@ import org.apache.grails.intellij.plugin.projectView.GrailsPluginsNode;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsGradleSyncProblemNode;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsApplicationNode;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsArtefactHandlerNode;
+import org.apache.grails.intellij.plugin.projectView.nodes.GrailsCustomFolderNode;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsPsiDirectoryNode;
 import org.apache.grails.intellij.plugin.projectView.nodes.OldGrailsPluginsNode;
 import org.apache.grails.intellij.plugin.structure.GrailsApplication;
@@ -64,9 +65,9 @@ public final class GrailsNodeComparator implements Comparator<NodeDescriptor<?>>
     if (left instanceof GrailsArtefactHandlerNode) return -1;
     if (right instanceof GrailsArtefactHandlerNode) return 1;
 
-    if (left instanceof GrailsPsiDirectoryNode leftDir && right instanceof GrailsPsiDirectoryNode rightDir) {
-      return leftDir.getNodeWeight() - rightDir.getNodeWeight();
-    }
+    int leftWeight = weight(left);
+    int rightWeight = weight(right);
+    if (leftWeight >= 0 && rightWeight >= 0) return leftWeight - rightWeight;
 
     if (right instanceof PsiFileNode rightFile && !(left instanceof PsiFileNode)
         && rightFile.getParent() instanceof GrailsApplicationNode) {
@@ -78,5 +79,11 @@ public final class GrailsNodeComparator implements Comparator<NodeDescriptor<?>>
     }
 
     return delegate.compare(left, right);
+  }
+
+  private static int weight(NodeDescriptor<?> node) {
+    if (node instanceof GrailsPsiDirectoryNode dir) return dir.getNodeWeight();
+    if (node instanceof GrailsCustomFolderNode folder) return folder.getNodeWeight();
+    return -1;
   }
 }

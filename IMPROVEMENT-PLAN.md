@@ -342,6 +342,44 @@ Controller, Domain, Service, TagLib, UrlMappings (fixed name, lives in
       data-service usage) so modern support has regression coverage — today's suite
       guards the legacy era.
 
+### 2.8 External directory browsing in Grails View custom folders
+
+The Grails View pane lets users configure up to 3 custom folder locations
+(global defaults with a per-project override) that appear as nodes below the
+test nodes. Currently these custom folders are resolved within the project's
+content roots — directories outside the project (e.g. `/home/user/Documents`,
+hidden dot-directories) cannot be browsed from the Grails View.
+
+This feature would let users point a custom folder location at **any filesystem
+path**, including directories outside the project and hidden folders:
+
+- [ ] Relax the custom-folder path resolution to accept arbitrary absolute
+      paths, not just project-relative directories
+- [ ] Support hidden directories (dot-files) — currently filtered by the
+      platform's default `Ignored Files and Folders` list
+- [ ] Filesystem-backed tree node for custom folders outside the project VFS,
+      or integration with the platform's `VirtualFileManager` for external paths
+- [ ] UI affordance: the custom-folder path input should accept manually typed
+      paths (not just directory choosers restricted to project content)
+- [ ] Consider read-only vs. read-write access for external files (editing may
+      conflict with the platform's file-watcher and VFS assumptions)
+
+**Limitation:** Until this feature is implemented, custom folder locations in
+the Grails View can only reference directories within the project. There is no
+built-in way to browse arbitrary external directories in IntelliJ IDEA's
+Project View. The available workarounds are:
+
+- **Navigate → File** (`Ctrl+Shift+N`) — open individual files by path or
+  name without adding anything to the project. No tree browsing.
+- **Built-in Terminal** (`Alt+F12`) — full filesystem access via `cd`, `ls`,
+  etc.
+- **File → New → Module from Existing Sources** — only works if the directory
+  is a project with a build file (e.g. a Gradle or Maven project). It cannot
+  create a module from a random directory of files.
+
+Drag-and-drop into the Project View offers to **copy** the folder into the
+project rather than link it.
+
 ---
 
 ## Phase 3 — Creating the new plugin (fork + prune + rename)

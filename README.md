@@ -8,6 +8,10 @@ integrations for i18n, coverage, Hibernate, Maven, and language injection.
 The Grails project view pane gives `grails-app/` dedicated **Stylesheets**, **Images**,
 **JavaScripts**, **Migrations**, **Translations** and **Utils** nodes, and lifts the test
 source roots out of `src` as **Tests:unit**, **Tests:integration** and **Tests:functional**.
+Users can configure up to 3 custom folders — global defaults with a per-project override —
+that appear as nodes below the test nodes in the Grails view. Custom folders can only
+reference directories within the project; there is no built-in way to browse external
+directories in the Grails view.
 
 The plugin runs on IntelliJ IDEA Ultimate and, with a reduced feature set, on IntelliJ IDEA
 Community Edition 2026.2+ (see [CE-SUPPORT.md](CE-SUPPORT.md)).

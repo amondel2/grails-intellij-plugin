@@ -105,6 +105,7 @@
     <viewNodeProvider implementation="org.apache.grails.intellij.plugin.projectView.impl.GrailsAppNodeProvider"/>
     <viewNodeProvider implementation="org.apache.grails.intellij.plugin.projectView.impl.OldGrailsNodeProvider"/>
     <viewNodeProvider implementation="org.apache.grails.intellij.plugin.projectView.impl.Grails3NodeProvider"/>
+    <viewNodeProvider implementation="org.apache.grails.intellij.plugin.projectView.impl.GrailsCustomFoldersNodeProvider"/>
 
     <!-- asset-pipeline: <asset:script> bodies are inline JavaScript (deferred scripts). -->
     <gspJsInjectionTag name="asset:script"/>
@@ -318,6 +319,15 @@
 
     <projectService serviceImplementation="org.apache.grails.intellij.plugin.lang.gsp.psi.gsp.impl.gtag.GspTagDescriptorService"/>
 
+    <applicationService serviceImplementation="org.apache.grails.intellij.plugin.config.GrailsCustomFoldersAppService"/>
+    <projectService serviceImplementation="org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService"/>
+    <projectConfigurable id="preferences.grails" groupId="tools"
+                         displayName="Grails IntelliJ Plugin"
+                         instance="org.apache.grails.intellij.plugin.config.GrailsPluginConfigurable"/>
+    <projectConfigurable id="preferences.grails.customFolders" parentId="preferences.grails"
+                         displayName="Custom Folders Configuration"
+                         instance="org.apache.grails.intellij.plugin.config.GrailsCustomFoldersConfigurable"/>
+
     <pom.declarationSearcher implementation="org.apache.grails.intellij.plugin.lang.gsp.psi.groovy.impl.ModelVariableDeclarationSearcher"/>
     <pom.declarationSearcher implementation="org.apache.grails.intellij.plugin.lang.gsp.psi.gsp.impl.gtag.GspTagVariableDeclarationSearcher"/>
     <pom.declarationSearcher implementation="org.apache.grails.intellij.plugin.references.domain.namedQuery.GormNamedQueryDeclarationSearcher"/>
@@ -498,6 +508,16 @@
 
     <action id="Grails.WAR" class="org.apache.grails.intellij.plugin.actions.GrailsWarAction">
       <add-to-group group-id="BuildMenu" anchor="last"/>
+    </action>
+
+    <action id="Grails.AddCustomFolder" class="org.apache.grails.intellij.plugin.actions.AddCustomFolderAction">
+      <add-to-group group-id="ProjectViewPopupMenu" anchor="after" relative-to-action="AddFrameworkSupport"/>
+    </action>
+    <action id="Grails.RemoveCustomFolder" class="org.apache.grails.intellij.plugin.actions.RemoveCustomFolderAction">
+      <add-to-group group-id="ProjectViewPopupMenu" anchor="after" relative-to-action="AddFrameworkSupport"/>
+    </action>
+    <action id="Grails.ConfigureCustomFolders" class="org.apache.grails.intellij.plugin.actions.ConfigureCustomFoldersAction">
+      <add-to-group group-id="ProjectViewPopupMenu" anchor="after" relative-to-action="AddFrameworkSupport"/>
     </action>
   </actions>
 
