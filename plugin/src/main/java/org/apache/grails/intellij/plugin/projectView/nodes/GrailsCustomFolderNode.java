@@ -31,6 +31,7 @@ import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiManager;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.tree.LeafState;
+import org.apache.grails.intellij.plugin.config.FolderPaths;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -60,11 +61,8 @@ public final class GrailsCustomFolderNode extends AbstractTreeNode<String> {
     this.mySettings = settings;
     this.myWeight = weight;
     this.myConfiguredPath = configuredPath;
-    String normalized = configuredPath;
-    while (normalized.length() > 1 && (normalized.endsWith("/") || normalized.endsWith("\\"))) {
-      normalized = normalized.substring(0, normalized.length() - 1);
-    }
-    int separator = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+    String normalized = FolderPaths.normalize(configuredPath);
+    int separator = normalized.lastIndexOf('/');
     this.myLabel = separator >= 0 ? normalized.substring(separator + 1) : normalized;
   }
 
@@ -97,8 +95,9 @@ public final class GrailsCustomFolderNode extends AbstractTreeNode<String> {
   }
 
   public boolean contains(@NotNull VirtualFile file) {
-    if (file == null || !file.isDirectory()) return false;
-    return myFile != null && VfsUtilCore.isAncestor(myFile, file, false);
+    // VfsUtilCore.isAncestor throws on a null argument even though this parameter is @NotNull.
+    if (file == null) return false;
+    return myFile != null && myFile.isDirectory() && VfsUtilCore.isAncestor(myFile, file, false);
   }
 
   @Override

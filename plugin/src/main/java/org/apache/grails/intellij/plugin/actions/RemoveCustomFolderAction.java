@@ -25,6 +25,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.util.ui.tree.TreeUtil;
+import org.apache.grails.intellij.plugin.config.FolderPaths;
 import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsCustomFolderNode;
 import org.jetbrains.annotations.NotNull;
@@ -42,7 +43,10 @@ public class RemoveCustomFolderAction extends DumbAwareAction {
     boolean visible = false;
     if (project != null) {
       AbstractProjectViewPane pane = ProjectView.getInstance(project).getCurrentProjectViewPane();
-      if (pane != null) visible = selectedCustomFolder(pane) != null;
+      if (pane != null) {
+        GrailsCustomFolderNode node = selectedCustomFolder(pane);
+        visible = node != null && isProjectFolder(project, node.getConfiguredPath());
+      }
     }
     e.getPresentation().setEnabledAndVisible(visible);
   }
@@ -63,8 +67,8 @@ public class RemoveCustomFolderAction extends DumbAwareAction {
 
     GrailsCustomFoldersProjectService service = project.getService(GrailsCustomFoldersProjectService.class);
     List<String> folders = new ArrayList<>(service.getFolders());
-    // A node can come from the global defaults, which this project does not own; removing one must
-    // not silently drop the rest of the project's configuration.
+    // Folders may have changed between update and actionPerformed (e.g. another settings dialog
+    // closed); if the selected folder is no longer in the project's list, there is nothing to do.
     if (!folders.remove(node.getConfiguredPath())) return;
     service.setFolders(folders);
   }
@@ -72,5 +76,14 @@ public class RemoveCustomFolderAction extends DumbAwareAction {
   private static @Nullable GrailsCustomFolderNode selectedCustomFolder(@NotNull AbstractProjectViewPane pane) {
     TreePath path = pane.getSelectedPath();
     return path == null ? null : TreeUtil.getLastUserObject(GrailsCustomFolderNode.class, path);
+  }
+
+  static boolean isProjectFolder(@NotNull Project project, @NotNull String configuredPath) {
+    String normalized = FolderPaths.normalize(configuredPath);
+    GrailsCustomFoldersProjectService service = project.getService(GrailsCustomFoldersProjectService.class);
+    for (String folder : service.getFolders()) {
+      if (FolderPaths.normalize(folder).equals(normalized)) return true;
+    }
+    return false;
   }
 }

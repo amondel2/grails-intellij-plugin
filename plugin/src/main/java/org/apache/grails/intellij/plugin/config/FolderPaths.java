@@ -26,7 +26,7 @@ import org.jetbrains.annotations.NotNull;
  * across common path variations (trailing separators, leading "./" or ".\\",
  * backslash vs forward slash).
  */
-final class FolderPaths {
+public final class FolderPaths {
 
   private FolderPaths() {
   }
@@ -44,7 +44,7 @@ final class FolderPaths {
    * This means "grails-app", "./grails-app", "grails-app/", "grails-app\\",
    * and ".\\grails-app" all normalize to the same key.
    */
-  static @NotNull String normalize(@NotNull String path) {
+  public static @NotNull String normalize(@NotNull String path) {
     String result = path.trim();
 
     while (result.startsWith("./") || result.startsWith(".\\")) {

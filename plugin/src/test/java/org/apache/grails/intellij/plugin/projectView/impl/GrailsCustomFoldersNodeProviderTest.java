@@ -147,6 +147,34 @@ public class GrailsCustomFoldersNodeProviderTest extends GrailsNodeProviderTestS
     assertFalse("a trailing slash still resolves the existing folder", nodes.get(0).getChildren().isEmpty());
   }
 
+  public void testLeadingDotSlashStillResolves() {
+    myFixture.addFileToProject("docs/readme.md", "# readme");
+
+    GrailsCustomFoldersProjectService service = getProject().getService(GrailsCustomFoldersProjectService.class);
+    service.setFolders(List.of("./docs"));
+
+    List<GrailsCustomFolderNode> nodes = customFolderNodes(
+      new GrailsCustomFoldersNodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT));
+
+    assertEquals("a leading ./ still produces its node", 1, nodes.size());
+    assertEquals("a leading ./ does not blank the folder name", "docs", label(nodes.get(0)));
+    assertFalse("a leading ./ still resolves the existing folder", nodes.get(0).getChildren().isEmpty());
+  }
+
+  public void testTrailingBackslashKeepsFolderName() {
+    myFixture.addFileToProject("docs/readme.md", "# readme");
+
+    GrailsCustomFoldersProjectService service = getProject().getService(GrailsCustomFoldersProjectService.class);
+    service.setFolders(List.of("docs\\"));
+
+    List<GrailsCustomFolderNode> nodes = customFolderNodes(
+      new GrailsCustomFoldersNodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT));
+
+    assertEquals("a trailing backslash still produces its node", 1, nodes.size());
+    assertEquals("a trailing backslash does not blank the folder name", "docs", label(nodes.get(0)));
+    assertFalse("a trailing backslash still resolves the existing folder", nodes.get(0).getChildren().isEmpty());
+  }
+
   public void testNodesSortedAlphabeticallyByLabel() {
     myFixture.addFileToProject("zebra/z.txt", "");
     myFixture.addFileToProject("alpha/a.txt", "");
@@ -180,6 +208,22 @@ public class GrailsCustomFoldersNodeProviderTest extends GrailsNodeProviderTestS
     assertFalse("a placeholder contains nothing", node.contains(otherDir));
     assertEquals("a placeholder must report itself as a leaf, or the tree keeps asking for children",
                  LeafState.ALWAYS, node.getLeafState());
+  }
+
+  public void testContainsFileInsideFolder() {
+    myFixture.addFileToProject("docs/readme.md", "# readme");
+
+    GrailsCustomFoldersProjectService service = getProject().getService(GrailsCustomFoldersProjectService.class);
+    service.setFolders(List.of("docs"));
+
+    GrailsCustomFolderNode node = customFolderNodes(
+      new GrailsCustomFoldersNodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT)).get(0);
+
+    VirtualFile file = myFixture.findFileInTempDir("docs/readme.md");
+    assertNotNull(file);
+    assertTrue("the folder directory itself is contained", node.contains(file.getParent()));
+    assertTrue("a file inside the folder is contained, so Reveal in Project View can find the node",
+               node.contains(file));
   }
 
   /**

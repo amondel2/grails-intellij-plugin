@@ -26,6 +26,7 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.apache.grails.intellij.plugin.config.FolderPaths;
 import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService;
 import org.apache.grails.intellij.plugin.projectView.NodeWeights;
 import org.apache.grails.intellij.plugin.projectView.api.GrailsViewNodeProvider;
@@ -57,7 +58,7 @@ public final class GrailsCustomFoldersNodeProvider implements GrailsViewNodeProv
   }
 
   private static @Nullable VirtualFile resolve(@NotNull GrailsApplication application, @NotNull String path) {
-    String normalized = stripTrailingSeparators(path);
+    String normalized = FolderPaths.normalize(path);
     if (isAbsolute(normalized)) {
       return LocalFileSystem.getInstance().findFileByPath(normalized);
     }
@@ -65,20 +66,14 @@ public final class GrailsCustomFoldersNodeProvider implements GrailsViewNodeProv
   }
 
   private static boolean isAbsolute(@NotNull String path) {
+    // After normalize, a UNC path like \\server\share becomes //server/share, so the
+    // startsWith("/") check covers it without a separate UNC branch.
     return path.startsWith("/") || path.matches("^[A-Za-z]:.*");
   }
 
   private static @NotNull String folderName(@NotNull String path) {
-    String normalized = stripTrailingSeparators(path);
-    int separator = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+    String normalized = FolderPaths.normalize(path);
+    int separator = normalized.lastIndexOf('/');
     return separator >= 0 ? normalized.substring(separator + 1) : normalized;
-  }
-
-  private static @NotNull String stripTrailingSeparators(@NotNull String path) {
-    String normalized = path;
-    while (normalized.length() > 1 && (normalized.endsWith("/") || normalized.endsWith("\\"))) {
-      normalized = normalized.substring(0, normalized.length() - 1);
-    }
-    return normalized;
   }
 }

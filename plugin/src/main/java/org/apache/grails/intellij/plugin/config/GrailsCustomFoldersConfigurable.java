@@ -163,14 +163,6 @@ public class GrailsCustomFoldersConfigurable implements Configurable {
   }
 
   /**
-   * Returns a warning message when the user has entered more unique folders than
-   * {@link GrailsCustomFoldersProjectService#MAX_FOLDERS} across both areas combined, or an empty
-   * string when the combined count is within the limit. Duplicates (after
-   * {@link FolderPaths#normalize(String)}) count once, matching {@link #parseFolders(String)}. The
-   * Grails view shows at most {@link GrailsCustomFoldersProjectService#MAX_FOLDERS} folders in
-   * total, so the combined count is what matters.
-   */
-  /**
    * The folders the Grails view would render for the given text, in the same order and with the
    * same cap as {@link GrailsCustomFoldersProjectService#getEffectiveFolders()}. Derived from the
    * text areas rather than from the services, so the preview tracks what the user has typed.
@@ -179,6 +171,14 @@ public class GrailsCustomFoldersConfigurable implements Configurable {
     return GrailsCustomFoldersProjectService.combine(parseFolders(overrideText), parseFolders(globalText));
   }
 
+  /**
+   * Returns a warning message when the user has entered more unique folders than
+   * {@link GrailsCustomFoldersProjectService#MAX_FOLDERS} across both areas combined, or an empty
+   * string when the combined count is within the limit. Duplicates (after
+   * {@link FolderPaths#normalize(String)}) count once, matching {@link #parseFolders(String)}. The
+   * Grails view shows at most {@link GrailsCustomFoldersProjectService#MAX_FOLDERS} folders in
+   * total, so the combined count is what matters.
+   */
   static @NotNull String warningMessage(@NotNull String globalText, @NotNull String overrideText) {
     int max = GrailsCustomFoldersProjectService.MAX_FOLDERS;
     Set<String> seen = new HashSet<>();

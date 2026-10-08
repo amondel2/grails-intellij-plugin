@@ -110,6 +110,24 @@ public class CustomFoldersActionTest extends GrailsTestCase {
     assertFalse(event.getPresentation().isVisible());
   }
 
+  public void testRemoveVisibleForProjectFolder() {
+    service().setFolders(List.of("docs"));
+
+    assertTrue("a folder this project owns can be removed",
+               RemoveCustomFolderAction.isProjectFolder(getProject(), "docs"));
+    assertTrue("a project folder written with a leading ./ is still recognized",
+               RemoveCustomFolderAction.isProjectFolder(getProject(), "./docs"));
+  }
+
+  // A node can come from the global defaults, which this project does not own; removing one would
+  // silently do nothing, so the action stays hidden for it.
+  public void testRemoveHiddenForGlobalFolder() {
+    service().setFolders(List.of("docs"));
+
+    assertFalse("a global-only folder is not this project's to remove",
+                RemoveCustomFolderAction.isProjectFolder(getProject(), "other"));
+  }
+
   public void testRemoveDoesNotThrowWithoutProject() {
     new RemoveCustomFolderAction().actionPerformed(event(new HashMap<>()));
   }

@@ -26,7 +26,6 @@ import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.components.StoragePathMacros;
 import com.intellij.openapi.project.Project;
-import com.intellij.util.messages.MessageBusConnection;
 import com.intellij.util.messages.Topic;
 import org.apache.grails.intellij.plugin.projectView.GrailsProjectViewPanes;
 import org.jetbrains.annotations.NotNull;
@@ -43,13 +42,10 @@ public final class GrailsCustomFoldersProjectService implements PersistentStateC
 
   private final Project project;
 
-  private final MessageBusConnection connection;
-
   private List<String> folders = new ArrayList<>();
 
   public GrailsCustomFoldersProjectService(@NotNull Project project) {
     this.project = project;
-    this.connection = project.getMessageBus().connect();
   }
 
   public @NotNull List<String> getFolders() {
