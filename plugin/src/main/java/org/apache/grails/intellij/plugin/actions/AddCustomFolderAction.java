@@ -45,7 +45,7 @@ public class AddCustomFolderAction extends DumbAwareAction {
       return;
     }
     PsiDirectory directory = getSelectedDirectory(e);
-    if (directory == null) {
+    if (directory == null || isProjectRoot(project, directory)) {
       e.getPresentation().setEnabledAndVisible(false);
       return;
     }
@@ -72,6 +72,7 @@ public class AddCustomFolderAction extends DumbAwareAction {
     Project project = e.getProject();
     PsiDirectory directory = getSelectedDirectory(e);
     if (project == null || directory == null) return;
+    if (isProjectRoot(project, directory)) return;
 
     VirtualFile virtualFile = directory.getVirtualFile();
     String path = VfsUtilCore.getRelativePath(virtualFile, project.getBaseDir(), '/');
@@ -85,6 +86,16 @@ public class AddCustomFolderAction extends DumbAwareAction {
       folders.add(path);
       service.setFolders(folders);
     }
+  }
+
+  /**
+   * The project root is already the top of the Grails view — adding it as a custom folder would
+   * duplicate the whole project under the application node, so the action stays hidden for it
+   * in every pane.
+   */
+  private static boolean isProjectRoot(@NotNull Project project, @NotNull PsiDirectory directory) {
+    VirtualFile baseDir = project.getBaseDir();
+    return baseDir != null && baseDir.equals(directory.getVirtualFile());
   }
 
   private static @Nullable PsiDirectory getSelectedDirectory(@NotNull AnActionEvent e) {

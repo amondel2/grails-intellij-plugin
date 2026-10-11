@@ -58,6 +58,33 @@ public class CustomFoldersActionTest extends GrailsTestCase {
     assertEquals(List.of("existing", expected), service.getFolders());
   }
 
+  // The project root is already the top of the Grails view; adding it as a custom folder would
+  // duplicate the whole project under the application node, so the action stays hidden for it.
+  public void testHiddenForProjectRoot() {
+    PsiDirectory root = PsiManager.getInstance(getProject()).findDirectory(getProject().getBaseDir());
+    assertNotNull(root);
+
+    AddCustomFolderAction action = new AddCustomFolderAction();
+    AnActionEvent event = event(data(CommonDataKeys.PROJECT, getProject(), CommonDataKeys.PSI_ELEMENT, root));
+
+    action.update(event);
+
+    assertFalse("the project root must not offer itself as a custom folder",
+                event.getPresentation().isVisible());
+  }
+
+  // Guard against invocation that bypasses update() (e.g. a user-mapped shortcut): the root is
+  // never stored as a custom folder.
+  public void testAddRootIsNoOp() {
+    PsiDirectory root = PsiManager.getInstance(getProject()).findDirectory(getProject().getBaseDir());
+    assertNotNull(root);
+
+    new AddCustomFolderAction().actionPerformed(
+      event(data(CommonDataKeys.PROJECT, getProject(), CommonDataKeys.PSI_ELEMENT, root)));
+
+    assertTrue(service().getFolders().isEmpty());
+  }
+
   public void testDisabledWhenThreeFoldersConfigured() {
     PsiDirectory directory = createDirectory("custom");
     GrailsCustomFoldersProjectService service = service();
