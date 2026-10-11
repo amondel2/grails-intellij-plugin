@@ -21,11 +21,13 @@ package org.apache.grails.intellij.plugin.projectView.nodes;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.projectView.PresentationData;
+import com.intellij.ide.projectView.ProjectViewNodeDecorator;
 import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.openapi.roots.ModuleRootModificationUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiManager;
+import com.intellij.ui.SimpleTextAttributes;
 import org.jetbrains.annotations.NotNull;
 import org.apache.grails.intellij.lib.testFramework.GrailsTestCase;
 import org.apache.grails.intellij.plugin.projectView.NodeWeights;
@@ -47,10 +49,16 @@ public class GrailsPsiDirectoryNodeTest extends GrailsTestCase {
   }
 
   /**
-   * Gradle's per-source-set modules make test directories module content roots. Only content roots
-   * receive the platform's coloured fragments, which take precedence over {@code presentableText}.
-   * Register the directory accordingly and verify that the platform adds fragments before our title
-   * replaces them, reproducing the case where a test root failed to render as {@code Tests:unit}.
+   * Gradle's per-source-set modules make test directories module content roots, and only content roots
+   * receive the platform's coloured fragments, which take precedence over {@code presentableText}. Every
+   * other directory is labelled by {@code setPresentableText} from
+   * {@code ProjectViewDirectoryHelper.getNodeName} and gets no fragments, which is why a nested directory
+   * like {@code grails-app/i18n} has nothing for this hook to replace.
+   *
+   * <p>So the directory is registered as a content entry: that is what makes the platform write its
+   * fragments first, reproducing the case where a test root failed to render as {@code Tests:unit}. The
+   * assertions below cover both halves — that the platform's own fragments are present beforehand, and
+   * that the title replaces them.
    */
   public void testTitleReplacesTheModuleContentRootFragments() {
     PsiDirectory directory = findDirectoryCreatedBy("src/test/ExampleSpec.groovy");
@@ -72,6 +80,32 @@ public class GrailsPsiDirectoryNodeTest extends GrailsTestCase {
                  List.of("Tests:unit"), drawnFragments(data));
     assertEquals("Tests:unit", data.getPresentableText());
     assertEquals("src/test", data.getLocationString());
+  }
+
+  /**
+   * The point of the decorator is to prove the title survives the decorator pass, since the write happens
+   * after it. This one is shaped like {@code GradleModuleDirectoryDecorator}'s {@code appendModuleName}
+   * branch, which rewrites a module content root's label to {@code "<presentableText> [moduleName]"} with
+   * the suffix in bold. A title written in {@code updateImpl} would be restyled that way and render as
+   * {@code "Tests:unit [app.test]"}, so this catches a later refactor moving the write earlier.
+   */
+  public void testTitleSurvivesProjectViewDecorators() {
+    PsiDirectory directory = findDirectoryCreatedBy("src/test/ExampleSpec.groovy");
+    ModuleRootModificationUtil.updateModel(getModule(), model -> model.addContentEntry(directory.getVirtualFile()));
+    ProjectViewNodeDecorator gradleLike = (node, data) -> {
+      String name = data.getPresentableText();
+      data.clearText();
+      data.addText(name + " ", SimpleTextAttributes.REGULAR_ATTRIBUTES);
+      data.addText("[app.test]", SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
+    };
+    getProject().getExtensionArea().getExtensionPoint("com.intellij.projectViewNodeDecorator")
+      .registerExtension(gradleLike, getTestRootDisposable());
+    GrailsPsiDirectoryNode node = new GrailsPsiDirectoryNode(directory, ViewSettings.DEFAULT, null,
+                                                             NodeWeights.TESTS_FOLDER, "Tests:unit", null, "src/test");
+
+    node.update();
+
+    assertEquals(List.of("Tests:unit"), drawnFragments(node.getPresentation()));
   }
 
   /** An untitled node keeps the platform's own fragments, so nothing is lost by not clearing them. */
