@@ -104,15 +104,27 @@ public class GrailsPsiDirectoryNode extends PsiDirectoryNode {
   }
 
   /**
-   * {@code PsiDirectoryNode.updateImpl} adds coloured fragments for module content roots; ordinary
-   * directories use {@code setPresentableText}, including qualified names such as {@code grails-app.i18n}.
-   * Gradle's per-source-set modules make {@code src/test} a content root, whose fragments can render as
-   * {@code test [app.test]}. The renderer prefers those fragments over {@code presentableText}, so
-   * setting only the latter to {@code Tests:unit} does not change that content-root label.
+   * {@code PsiDirectoryNode.updateImpl} adds coloured fragments only when the directory is a module
+   * content root ({@code ProjectRootsUtil.isModuleContentRoot}) and the file resolves to at least one
+   * module. Gradle's per-source-set modules make {@code src/test} one, so it arrives carrying fragments
+   * that can render as {@code test [app.test]}, and the renderer prefers those over
+   * {@code presentableText} — setting only the latter to {@code Tests:unit} leaves the content-root
+   * label visible.
    *
-   * <p>{@code postprocess} applies the custom title to both the updated presentation and the template.
-   * Replacing any platform fragments and setting {@code presentableText} keeps the title consistent
-   * for both content roots and ordinary directories.
+   * <p>For every other directory the platform calls {@code setPresentableText} and adds no fragments at
+   * all, so the qualified name such as {@code grails-app.i18n} comes from
+   * {@code ProjectViewDirectoryHelper.getNodeName} through that field, not from a fragment. That is why
+   * the Views, Configuration and Initialization titles always rendered without this hook. Do not go
+   * looking for directory-name fragments on a nested directory: there are none.
+   *
+   * <p>Replacing any platform fragments and setting {@code presentableText} keeps the title consistent
+   * for both content roots and ordinary directories. The write has to stay in {@code postprocess} and
+   * cannot move into {@code updateImpl}: every {@code ProjectViewNodeDecorator} runs in between, and in
+   * a Gradle project {@code GradleModuleDirectoryDecorator} rewrites content-root fragments — bolding
+   * the first fragment for a source-set module, and relabelling to
+   * {@code "<presentableText> [moduleName]"} when the source-set name differs from the directory name. A
+   * title written in {@code updateImpl} would come out restyled or suffixed, so only this hook, which
+   * runs after the decorators, leaves the label final.
    */
   @Override
   protected void postprocess(@NotNull PresentationData data) {
