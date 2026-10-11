@@ -163,17 +163,20 @@ both ordinary directories and module content roots, which the platform presents 
 **Module content-root labels use coloured fragments; ordinary directories use `presentableText`.**
 In platform 262.10315.125, `PsiDirectoryNode.updateImpl` adds coloured fragments only when
 `ProjectRootsUtil.isModuleContentRoot` is true *and* the file resolves to at least one module; a content
-root that resolves to none falls through to the `presentableText` path too. For those directories it calls
-`setPresentableText` with the name from `ProjectViewDirectoryHelper.getNodeName`, which can be qualified
-(`grails-app.i18n`).
+root that resolves to none falls through to the `presentableText` path too. That fall-through needs shared
+source support (`CodeInsightContexts.isSharedSourceSupportEnabled`) to be possible, because without it
+`modules` is the singleton list of `fi.getModuleForFile(file)` and can never be empty. For those
+directories it calls `setPresentableText` with the name from `ProjectViewDirectoryHelper.getNodeName`,
+which can be qualified (`grails-app.i18n`).
 Gradle's per-source-set modules make `src/test` a module content root, so its label can be
 `test [app.test]` in fragments. The renderer prefers a non-empty fragment list over `presentableText`;
 setting only the latter to `Tests:unit` leaves the content-root label visible.
 `GrailsPsiDirectoryNode.postprocess` replaces any fragments and sets `presentableText`, keeping custom
-titles consistent for both kinds of directory. `postprocess` itself is a choice rather than a requirement:
-the platform has written the label by the time either hook's body runs, because `super.updateImpl` is the
-first statement of the override, so clearing the fragments in `updateImpl` would work equally well. Do not
-treat `updateImpl` as too early: `super.updateImpl` writes the label before the rest of the override runs.
+titles consistent for both kinds of directory. `postprocess` is required, not optional: every
+`ProjectViewNodeDecorator` runs between `updateImpl` and `postprocess`, and in Gradle projects
+`GradleModuleDirectoryDecorator` rewrites content-root fragments (bolding the first fragment for a
+source-set module, and relabelling to `"<presentableText> [moduleName]"` when the source-set name
+differs from the directory name), so a title written in `updateImpl` would be restyled or suffixed.
 
 **Tests must include `postprocess` and inspect the fragments when present.** Run `update()` then
 read `getPresentation()` — or call `updateImpl` and then `postprocess` — to see the final custom title.
