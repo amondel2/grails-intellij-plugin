@@ -108,8 +108,9 @@ public abstract class GrailsNodeProviderTestSupport extends GrailsTestCase {
    * afterwards.
    */
   protected static @NotNull PresentationData rendered(@NotNull GrailsPsiDirectoryNode node) {
-    // update() runs updateImpl and then postprocess, which is the sequence the renderer sees; getPresentation()
-    // then returns that result. postprocess is protected, so it cannot be called from this package directly.
+    // update() runs updateImpl, then the project-view decorators, then postprocess, which is the sequence the
+    // renderer sees; getPresentation() then returns that result. postprocess is protected, so it cannot be
+    // called from this package directly.
     node.update();
     return node.getPresentation();
   }

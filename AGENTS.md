@@ -179,7 +179,9 @@ source-set module, and relabelling to `"<presentableText> [moduleName]"` when th
 differs from the directory name), so a title written in `updateImpl` would be restyled or suffixed.
 
 **Tests must include `postprocess` and inspect the fragments when present.** Run `update()` then
-read `getPresentation()` — or call `updateImpl` and then `postprocess` — to see the final custom title.
+read `getPresentation()` to see the final custom title. Calling `updateImpl` and then `postprocess`
+directly skips the decorators that run between them, so use that only to assert the platform's
+fragments before the title replaces them, as `testTitleReplacesTheModuleContentRootFragments` does.
 Asserting only `presentableText` misses a stale fragment list that the renderer would prefer.
 A test that passes both with and without a labelling fix is not covering it: verify by reverting
 the fix and watching the test fail.
