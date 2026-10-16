@@ -83,8 +83,10 @@ public enum GrailsArtifact {
   TAGLIB(NotNullLazyValue.createValue(() -> GroovyMvcIcons.Taglib), "TagLib", "taglib"),
   SERVICE(NotNullLazyValue.createValue(() -> AllIcons.FileTypes.Config), "Service", "services") {
     /**
-     * A GORM data service is an interface annotated with {@code grails.gorm.services.Service}; GORM
-     * generates the implementation at compile time, so the interface is the only source artefact.
+     * A GORM data service ({@code @Service(Domain) interface FooService}) is an interface whose
+     * implementation GORM generates at compile time. The annotation is not checked, since it may not
+     * resolve: any interface named {@code *Service} under {@code grails-app/services} is a service
+     * artefact.
      */
     @Override
     public boolean isArtefactDefinition(@Nullable PsiClass psiClass) {

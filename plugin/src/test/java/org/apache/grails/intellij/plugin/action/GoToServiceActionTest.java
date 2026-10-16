@@ -132,6 +132,22 @@ class CastleService {
     assertEquals("quest", GrailsArtifact.SERVICE.getArtifactName(service));
   }
 
+  /** The annotation is not checked: a {@code *Service} interface under {@code services} is a service without {@code @Service} too. */
+  public void testUnannotatedServiceInterfaceIsAServiceArtefact() {
+    PsiClass service = publicClass(addService("""
+
+package com.kousenit
+
+interface PricingService {
+  BigDecimal priceOf(Quest quest)
+}
+"""));
+
+    assertSame(GrailsArtifact.SERVICE, GrailsArtifact.getType(service));
+    assertTrue(GrailsArtifact.SERVICE.isInstance(service));
+    assertEquals("pricing", GrailsArtifact.SERVICE.getArtifactName(service));
+  }
+
   /** From the service's own toolbar, "Go To Domain" and "Go To Controller" still resolve the siblings. */
   public void testNavigationFromDataServiceInterface() {
     addDomain(QUEST_DOMAIN);
