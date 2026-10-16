@@ -21,6 +21,12 @@ package org.apache.grails.intellij.plugin.config;
 
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 /**
  * Utility for normalizing folder paths so that duplicates can be detected
  * across common path variations (trailing separators, leading "./" or ".\\",
@@ -56,5 +62,38 @@ public final class FolderPaths {
     }
 
     return result.replace('\\', '/');
+  }
+
+  /**
+   * Trims, drops blanks, and drops entries that {@link #normalize(String)} to a key already seen,
+   * keeping the first spelling of each. Nothing is capped here: the cap belongs to the code that
+   * renders the folders, not to the store, so lowering it can never delete a stored folder.
+   */
+  public static @NotNull List<String> dedupe(@NotNull Collection<String> raw) {
+    List<String> result = new ArrayList<>();
+    Set<String> seen = new HashSet<>();
+    for (String folder : raw) {
+      if (folder == null) continue;
+      String trimmed = folder.trim();
+      if (trimmed.isEmpty()) continue;
+      String normalized = normalize(trimmed);
+      if (normalized.isEmpty()) continue;
+      if (seen.add(normalized)) {
+        result.add(trimmed);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * The last segment of the normalized path, which is what both custom-folder node kinds label
+   * themselves with and the key the provider sorts by. One copy, because the sort and the labels
+   * have to agree: if the provider sorted by a different rule than the nodes render, the tree would
+   * look sorted while not being so.
+   */
+  public static @NotNull String folderName(@NotNull String path) {
+    String normalized = normalize(path);
+    int separator = normalized.lastIndexOf('/');
+    return separator >= 0 ? normalized.substring(separator + 1) : normalized;
   }
 }

@@ -22,15 +22,16 @@ package org.apache.grails.intellij.plugin.projectView.impl;
 import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.psi.PsiDirectory;
+import com.intellij.psi.PsiManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.apache.grails.intellij.plugin.config.FolderPaths;
 import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService;
-import org.apache.grails.intellij.plugin.projectView.NodeWeights;
 import org.apache.grails.intellij.plugin.projectView.api.GrailsViewNodeProvider;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsCustomFolderNode;
+import org.apache.grails.intellij.plugin.projectView.nodes.GrailsMissingCustomFolderNode;
 import org.apache.grails.intellij.plugin.structure.GrailsApplication;
 
 import java.util.ArrayList;
@@ -47,33 +48,20 @@ public final class GrailsCustomFoldersNodeProvider implements GrailsViewNodeProv
     List<String> folders = project.getService(GrailsCustomFoldersProjectService.class).getEffectiveFolders();
 
     List<String> sorted = new ArrayList<>(folders);
-    sorted.sort(Comparator.comparing(GrailsCustomFoldersNodeProvider::folderName));
+    sorted.sort(Comparator.comparing(FolderPaths::folderName));
 
     Collection<AbstractTreeNode<?>> result = new ArrayList<>();
     for (String configuredPath : sorted) {
-      VirtualFile file = resolve(application, configuredPath);
-      result.add(new GrailsCustomFolderNode(project, file, settings, NodeWeights.CUSTOM_FOLDER, configuredPath));
+      PsiDirectory dir = resolve(application, configuredPath);
+      result.add(dir != null
+                 ? new GrailsCustomFolderNode(project, dir, settings, configuredPath)
+                 : new GrailsMissingCustomFolderNode(project, settings, configuredPath));
     }
     return result;
   }
 
-  private static @Nullable VirtualFile resolve(@NotNull GrailsApplication application, @NotNull String path) {
-    String normalized = FolderPaths.normalize(path);
-    if (isAbsolute(normalized)) {
-      return LocalFileSystem.getInstance().findFileByPath(normalized);
-    }
-    return application.getRoot().findFileByRelativePath(normalized);
-  }
-
-  private static boolean isAbsolute(@NotNull String path) {
-    // After normalize, a UNC path like \\server\share becomes //server/share, so the
-    // startsWith("/") check covers it without a separate UNC branch.
-    return path.startsWith("/") || path.matches("^[A-Za-z]:.*");
-  }
-
-  private static @NotNull String folderName(@NotNull String path) {
-    String normalized = FolderPaths.normalize(path);
-    int separator = normalized.lastIndexOf('/');
-    return separator >= 0 ? normalized.substring(separator + 1) : normalized;
+  private static @Nullable PsiDirectory resolve(@NotNull GrailsApplication application, @NotNull String path) {
+    VirtualFile file = application.getRoot().findFileByRelativePath(FolderPaths.normalize(path));
+    return file == null ? null : PsiManager.getInstance(application.getProject()).findDirectory(file);
   }
 }

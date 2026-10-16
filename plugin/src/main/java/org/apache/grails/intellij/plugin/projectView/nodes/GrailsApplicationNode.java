@@ -65,7 +65,7 @@ public class GrailsApplicationNode extends ProjectViewNode<GrailsApplication> {
           throw e;
         }
         Logger.getInstance(GrailsApplicationNode.class)
-          .warn("Grails view provider " + provider.getClass().getName() + " failed; skipping its nodes", e);
+          .error("Grails view provider " + provider.getClass().getName() + " failed; skipping its nodes", e);
       }
     }
     return result;

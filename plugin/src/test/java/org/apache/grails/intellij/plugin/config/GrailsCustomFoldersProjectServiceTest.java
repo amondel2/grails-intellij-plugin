@@ -21,6 +21,7 @@ package org.apache.grails.intellij.plugin.config;
 
 import com.intellij.ide.projectView.ProjectView;
 import com.intellij.ide.projectView.impl.AbstractProjectViewPane;
+import com.intellij.util.messages.MessageBusConnection;
 import org.jetbrains.annotations.NotNull;
 import org.apache.grails.intellij.lib.testFramework.GrailsTestCase;
 import org.apache.grails.intellij.plugin.config.GrailsConstants;
@@ -45,10 +46,14 @@ public class GrailsCustomFoldersProjectServiceTest extends GrailsTestCase {
     assertEquals(Arrays.asList("src/main/groovy", "grails-app/domain"), service.getFolders());
   }
 
-  public void testMaxThreeFoldersEnforced() {
+  /**
+   * The cap limits what the view renders, not what is stored, so a stored folder must survive the
+   * cap being lowered. {@link #getEffectiveFolders()} is where the truncation happens.
+   */
+  public void testFoldersAreNotTruncatedOnSave() {
     GrailsCustomFoldersProjectService service = new GrailsCustomFoldersProjectService(getProject());
     service.setFolders(Arrays.asList("a", "b", "c", "d"));
-    assertEquals(Arrays.asList("a", "b", "c"), service.getFolders());
+    assertEquals(Arrays.asList("a", "b", "c", "d"), service.getFolders());
   }
 
   public void testPersistenceRoundTrip() {
@@ -84,43 +89,42 @@ public class GrailsCustomFoldersProjectServiceTest extends GrailsTestCase {
     });
   }
 
-  /**
-   * The project's own folders take precedence: with two global and two custom folders only three
-   * folders are rendered, so the custom ones are kept and the global ones fill what is left.
-   */
-  public void testEffectiveFoldersAreCappedAtThreeWithProjectFoldersFirst() {
-    withGlobalFolders(Arrays.asList("global1", "global2"), () -> {
-      GrailsCustomFoldersProjectService service = new GrailsCustomFoldersProjectService(getProject());
-      service.setFolders(Arrays.asList("custom1", "custom2"));
-      assertEquals(Arrays.asList("custom1", "custom2", "global1"), service.getEffectiveFolders());
-    });
-  }
-
-  /** Three custom folders fill the budget, so no global folder is rendered. */
-  public void testThreeProjectFoldersExcludeAllGlobalFolders() {
-    withGlobalFolders(Arrays.asList("global1", "global2"), () -> {
+  /** The cap is the setting, not a constant: lowering it shortens what the view shows. */
+  public void testGetEffectiveFoldersReadsTheCapFromTheApplicationService() {
+    withGlobalFolders(Arrays.asList("global1", "global2"), 2, () -> {
       GrailsCustomFoldersProjectService service = new GrailsCustomFoldersProjectService(getProject());
       service.setFolders(Arrays.asList("custom1", "custom2", "custom3"));
-      assertEquals(Arrays.asList("custom1", "custom2", "custom3"), service.getEffectiveFolders());
+      assertEquals("the cap comes from the app service, so three project folders yield two",
+                   Arrays.asList("custom1", "custom2"), service.getEffectiveFolders());
     });
   }
 
-  /** Two global and one custom fills exactly three, so both areas contribute. */
-  public void testTwoGlobalAndOneProjectFolderFillsTheCap() {
-    withGlobalFolders(Arrays.asList("global1", "global2"), () -> {
+  /**
+   * The cap binds only at render time: all ten project folders stay stored, and the view shows the
+   * first two.
+   */
+  public void testTenProjectFoldersRenderOnlyTheFirstTwo() {
+    List<String> ten = Arrays.asList("f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10");
+    withGlobalFolders(Arrays.asList(), 2, () -> {
       GrailsCustomFoldersProjectService service = new GrailsCustomFoldersProjectService(getProject());
-      service.setFolders(Arrays.asList("custom1"));
-      assertEquals(Arrays.asList("custom1", "global1", "global2"), service.getEffectiveFolders());
+      service.setFolders(ten);
+      assertEquals(ten, service.getFolders());
+      assertEquals(Arrays.asList("f1", "f2"), service.getEffectiveFolders());
     });
   }
 
-  /** Any number of global folders still yields at most three in total. */
-  public void testGlobalOnlyIsStillCappedAtThree() {
-    withGlobalFolders(Arrays.asList("global1", "global2"), () -> {
-      GrailsCustomFoldersProjectService service = new GrailsCustomFoldersProjectService(getProject());
-      assertEquals(3, GrailsCustomFoldersProjectService.MAX_FOLDERS);
-      assertEquals(2, service.getEffectiveFolders().size());
-    });
+  /** The cap counts unique folders across both areas, so project folders fill it first. */
+  public void testCombineKeepsProjectFoldersFirstUnderTheCap() {
+    assertEquals(Arrays.asList("custom1", "custom2", "global1"),
+                 GrailsCustomFoldersProjectService.combine(Arrays.asList("custom1", "custom2"),
+                                                           Arrays.asList("global1", "global2"), 3));
+  }
+
+  /** Any number of global folders still yields at most the cap in total. */
+  public void testCombineLimitsGlobalOnlyFolders() {
+    assertEquals(Arrays.asList("global1", "global2"),
+                 GrailsCustomFoldersProjectService.combine(Arrays.<String>asList(),
+                                                           Arrays.asList("global1", "global2", "global3"), 2));
   }
 
   /** A folder in both areas is rendered once, keeping the project's spelling of it. */
@@ -140,33 +144,45 @@ public class GrailsCustomFoldersProjectServiceTest extends GrailsTestCase {
     });
   }
 
+  /** A cap of zero would render nothing, so the effective list is empty rather than all of them. */
+  public void testCombineWithNoCapRendersNothing() {
+    assertEquals(Arrays.<String>asList(),
+                 GrailsCustomFoldersProjectService.combine(Arrays.asList("a"),
+                                                           Arrays.asList("b"), 0));
+  }
+
   /** Runs {@code body} with the global defaults temporarily set, restoring them afterwards. */
   private void withGlobalFolders(@NotNull List<String> folders, @NotNull Runnable body) {
+    withGlobalFolders(folders, GrailsCustomFoldersAppService.getStaticInstance().getMaxFolders(), body);
+  }
+
+  private void withGlobalFolders(@NotNull List<String> folders, int maxFolders, @NotNull Runnable body) {
     GrailsCustomFoldersAppService appService = GrailsCustomFoldersAppService.getStaticInstance();
     List<String> original = new ArrayList<>(appService.getFolders());
+    int originalMax = appService.getMaxFolders();
     try {
       appService.setFolders(folders);
+      appService.setMaxFolders(maxFolders);
       body.run();
     }
     finally {
       appService.setFolders(original);
+      appService.setMaxFolders(originalMax);
     }
   }
 
   /**
-   * Verifies that changing folders publishes the event that triggers a Grails pane refresh.
-   * The subscriber in the service calls {@code GrailsProjectViewPanes.refresh(project)} which
-   * refreshes the Grails pane by ID, regardless of which pane is currently active.
+   * Changing the folders publishes the project-bus event that the pane-refresh subscriber listens
+   * for. The refresh itself is the subscriber's job
+   * ({@link GrailsCustomFoldersRefreshListenerTest}); the service only publishes.
    */
   public void testSetFoldersPublishesChangeEvent() {
     GrailsCustomFoldersProjectService service = new GrailsCustomFoldersProjectService(getProject());
     boolean[] eventReceived = {false};
 
-    // Subscribe to the same topic the service publishes to
-    com.intellij.util.messages.MessageBusConnection connection =
-      getProject().getMessageBus().connect(getTestRootDisposable());
+    MessageBusConnection connection = getProject().getMessageBus().connect(getTestRootDisposable());
     connection.subscribe(GrailsCustomFoldersProjectService.FoldersChangedListener.TOPIC,
-                        () -> eventReceived[0] = true);
+                         () -> eventReceived[0] = true);
 
     service.setFolders(Arrays.asList("src/main/groovy"));
 
@@ -222,9 +238,13 @@ public class GrailsCustomFoldersProjectServiceTest extends GrailsTestCase {
     assertEquals(Arrays.asList("grails-app", "/grails-app"), service.getFolders());
   }
 
-  public void testDeduplicationBeforeMaxLimit() {
+  /**
+   * The cap never truncated the store, so every unique folder is kept however many spellings of it
+   * were typed: four here, not three.
+   */
+  public void testDeduplicationIsNotBoundedByTheCap() {
     GrailsCustomFoldersProjectService service = new GrailsCustomFoldersProjectService(getProject());
     service.setFolders(Arrays.asList("a", "a/", "b", "b/", "c", "c/", "d", "d/"));
-    assertEquals(Arrays.asList("a", "b", "c"), service.getFolders());
+    assertEquals(Arrays.asList("a", "b", "c", "d"), service.getFolders());
   }
 }

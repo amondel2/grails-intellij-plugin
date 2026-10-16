@@ -321,11 +321,8 @@
 
     <applicationService serviceImplementation="org.apache.grails.intellij.plugin.config.GrailsCustomFoldersAppService"/>
     <projectService serviceImplementation="org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService"/>
-    <projectConfigurable id="preferences.grails" groupId="tools"
-                         displayName="Grails IntelliJ Plugin"
-                         instance="org.apache.grails.intellij.plugin.config.GrailsPluginConfigurable"/>
-    <projectConfigurable id="preferences.grails.customFolders" parentId="preferences.grails"
-                         displayName="Custom Folders Configuration"
+    <projectConfigurable id="preferences.grails" groupId="language"
+                         displayName="Grails" nonDefaultProject="true"
                          instance="org.apache.grails.intellij.plugin.config.GrailsCustomFoldersConfigurable"/>
 
     <pom.declarationSearcher implementation="org.apache.grails.intellij.plugin.lang.gsp.psi.groovy.impl.ModelVariableDeclarationSearcher"/>
@@ -392,6 +389,7 @@
     <iconProvider implementation="org.apache.grails.intellij.plugin.projectView.GrailsIconProvider"/>
     <postStartupActivity implementation="org.apache.grails.intellij.plugin.structure.sync.GrailsStartupActivity"/>
     <postStartupActivity implementation="org.apache.grails.intellij.plugin.structure.GrailsApplicationManagerRefresher"/>
+    <postStartupActivity implementation="org.apache.grails.intellij.plugin.projectView.GrailsCustomFoldersRefreshListener"/>
     <backgroundPostStartupActivity implementation="org.apache.grails.intellij.plugin.structure.sync.GrailsMvcStructureRefresher"/>
     <editorNotificationProvider implementation="org.apache.grails.intellij.plugin.editor.GrailsEditorDecorator"/>
     <editorNotificationProvider implementation="org.apache.grails.intellij.plugin.editor.GrailsGradleSyncNotificationProvider"/>

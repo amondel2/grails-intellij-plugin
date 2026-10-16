@@ -22,42 +22,31 @@ import com.intellij.ide.projectView.ProjectView;
 import com.intellij.ide.projectView.impl.AbstractProjectViewPane;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDirectory;
-import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiManager;
-import com.intellij.util.ui.tree.TreeUtil;
+import org.apache.grails.intellij.plugin.config.GrailsConstants;
 import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersConfigurable;
-import org.apache.grails.intellij.plugin.projectView.nodes.GrailsCustomFolderNode;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
-import javax.swing.tree.TreePath;
 
 public class ConfigureCustomFoldersAction extends DumbAwareAction {
 
   @Override
   public void update(@NotNull AnActionEvent e) {
     Project project = e.getProject();
-    boolean visible = false;
-    if (project != null) {
-      AbstractProjectViewPane pane = ProjectView.getInstance(project).getCurrentProjectViewPane();
-      if (pane != null) {
-        // Visible when a custom folder node is selected (same as Remove)
-        if (isCustomFolderSelected(pane)) {
-          visible = true;
-        }
-        // Also visible when a directory is selected (same as Add)
-        else if (getSelectedDirectory(e) != null) {
-          visible = true;
-        }
-      }
-    }
-    e.getPresentation().setEnabledAndVisible(visible);
+    e.getPresentation().setEnabledAndVisible(
+      project != null && offersSettings(isGrailsPane(project), isCustomFolderSelected(e), selectedDirectory(e) != null));
+  }
+
+  /**
+   * The visibility rule. The pane and the selection arrive as separate inputs because a light
+   * fixture has no Grails pane to make current, so the rule is asserted on its own rather than
+   * through a pane that cannot exist.
+   */
+  static boolean offersSettings(boolean inGrailsPane, boolean customFolderSelected, boolean directorySelected) {
+    return inGrailsPane && (customFolderSelected || directorySelected);
   }
 
   @Override
@@ -72,20 +61,23 @@ public class ConfigureCustomFoldersAction extends DumbAwareAction {
     ShowSettingsUtil.getInstance().showSettingsDialog(project, GrailsCustomFoldersConfigurable.class);
   }
 
-  private static boolean isCustomFolderSelected(@NotNull AbstractProjectViewPane pane) {
-    TreePath path = pane.getSelectedPath();
-    return path != null && TreeUtil.getLastUserObject(GrailsCustomFolderNode.class, path) != null;
+  /**
+   * The only pane lookup the custom-folder actions still make: the settings are about the Grails
+   * pane, so it is the only pane they are offered in.
+   */
+  static boolean isGrailsPane(@NotNull Project project) {
+    return isGrailsPane(ProjectView.getInstance(project).getCurrentProjectViewPane());
   }
 
-  private static @Nullable PsiDirectory getSelectedDirectory(@NotNull AnActionEvent e) {
-    PsiElement element = e.getData(CommonDataKeys.PSI_ELEMENT);
-    if (element instanceof PsiDirectory) {
-      return (PsiDirectory)element;
-    }
-    VirtualFile virtualFile = e.getData(CommonDataKeys.VIRTUAL_FILE);
-    if (virtualFile != null && virtualFile.isDirectory()) {
-      return PsiManager.getInstance(e.getProject()).findDirectory(virtualFile);
-    }
-    return null;
+  static boolean isGrailsPane(@Nullable AbstractProjectViewPane pane) {
+    return pane != null && GrailsConstants.GRAILS.equals(pane.getId());
+  }
+
+  static boolean isCustomFolderSelected(@NotNull AnActionEvent e) {
+    return CustomFolderSelection.customFolder(e) != null;
+  }
+
+  static @Nullable PsiDirectory selectedDirectory(@NotNull AnActionEvent e) {
+    return CustomFolderSelection.directory(e);
   }
 }

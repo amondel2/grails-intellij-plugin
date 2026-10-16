@@ -18,20 +18,17 @@
  */
 package org.apache.grails.intellij.plugin.actions;
 
-import com.intellij.ide.projectView.ProjectView;
-import com.intellij.ide.projectView.impl.AbstractProjectViewPane;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
-import com.intellij.util.ui.tree.TreeUtil;
 import org.apache.grails.intellij.plugin.config.FolderPaths;
 import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService;
-import org.apache.grails.intellij.plugin.projectView.nodes.GrailsCustomFolderNode;
+import org.apache.grails.intellij.plugin.projectView.nodes.GrailsCustomFolder;
+import org.apache.grails.intellij.plugin.structure.GrailsApplicationManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import javax.swing.tree.TreePath;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,12 +38,9 @@ public class RemoveCustomFolderAction extends DumbAwareAction {
   public void update(@NotNull AnActionEvent e) {
     Project project = e.getProject();
     boolean visible = false;
-    if (project != null) {
-      AbstractProjectViewPane pane = ProjectView.getInstance(project).getCurrentProjectViewPane();
-      if (pane != null) {
-        GrailsCustomFolderNode node = selectedCustomFolder(pane);
-        visible = node != null && isProjectFolder(project, node.getConfiguredPath());
-      }
+    if (project != null && GrailsApplicationManager.getInstance(project).hasApplications()) {
+      GrailsCustomFolder folder = selectedCustomFolder(e);
+      visible = folder != null && isProjectFolder(project, folder.getConfiguredPath());
     }
     e.getPresentation().setEnabledAndVisible(visible);
   }
@@ -60,22 +54,20 @@ public class RemoveCustomFolderAction extends DumbAwareAction {
   public void actionPerformed(@NotNull AnActionEvent e) {
     Project project = e.getProject();
     if (project == null) return;
-    AbstractProjectViewPane pane = ProjectView.getInstance(project).getCurrentProjectViewPane();
-    if (pane == null) return;
-    GrailsCustomFolderNode node = selectedCustomFolder(pane);
-    if (node == null) return;
+    GrailsCustomFolder folder = selectedCustomFolder(e);
+    if (folder == null) return;
 
     GrailsCustomFoldersProjectService service = project.getService(GrailsCustomFoldersProjectService.class);
     List<String> folders = new ArrayList<>(service.getFolders());
     // Folders may have changed between update and actionPerformed (e.g. another settings dialog
     // closed); if the selected folder is no longer in the project's list, there is nothing to do.
-    if (!folders.remove(node.getConfiguredPath())) return;
+    if (!folders.remove(folder.getConfiguredPath())) return;
     service.setFolders(folders);
   }
 
-  private static @Nullable GrailsCustomFolderNode selectedCustomFolder(@NotNull AbstractProjectViewPane pane) {
-    TreePath path = pane.getSelectedPath();
-    return path == null ? null : TreeUtil.getLastUserObject(GrailsCustomFolderNode.class, path);
+  /** The selection itself is read by {@link CustomFolderSelection#customFolder(AnActionEvent)}. */
+  static @Nullable GrailsCustomFolder selectedCustomFolder(@NotNull AnActionEvent e) {
+    return CustomFolderSelection.customFolder(e);
   }
 
   static boolean isProjectFolder(@NotNull Project project, @NotNull String configuredPath) {

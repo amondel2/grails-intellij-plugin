@@ -22,20 +22,26 @@ package org.apache.grails.intellij.plugin.projectView;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
-import com.intellij.openapi.application.WriteAction;
+import com.intellij.openapi.fileTypes.FileTypeRegistry;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.UserDataHolderBase;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.testFramework.LoggedErrorProcessor;
 import com.intellij.testFramework.PlatformTestUtil;
+import com.intellij.ui.tree.LeafState;
+import com.intellij.util.ThrowableRunnable;
 import org.apache.grails.intellij.lib.testFramework.GrailsTestCase;
 import org.apache.grails.intellij.plugin.config.GrailsConstants;
 import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService;
 import org.apache.grails.intellij.plugin.projectView.api.GrailsViewNodeProvider;
 import org.apache.grails.intellij.plugin.projectView.impl.GrailsCustomFoldersNodeProvider;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsApplicationNode;
+import org.apache.grails.intellij.plugin.projectView.nodes.GrailsCustomFolder;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsCustomFolderNode;
+import org.apache.grails.intellij.plugin.projectView.nodes.GrailsMissingCustomFolderNode;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsRootNode;
 import org.apache.grails.intellij.plugin.structure.GrailsApplication;
 import org.apache.grails.intellij.plugin.structure.GrailsApplicationManager;
@@ -43,14 +49,12 @@ import org.apache.grails.intellij.plugin.util.version.Version;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.Icon;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 /**
  * The Grails pane builds its tree by calling {@code getChildren()} down the node chain on a
@@ -59,6 +63,8 @@ import static org.junit.Assert.fail;
  * to be reported as "the plugin fails to repaint". These tests walk the real node chain.
  */
 public class GrailsCustomFoldersPaneTest extends GrailsTestCase {
+
+  private static final String LOGGER_CATEGORY = GrailsApplicationNode.class.getName();
 
   /**
    * A configured folder that does not exist on disk must still produce a node, and building the tree
@@ -72,13 +78,24 @@ public class GrailsCustomFoldersPaneTest extends GrailsTestCase {
                 paths.contains("no-such-directory"));
   }
 
-  /** An absolute path resolves through LocalFileSystem, which returns no VirtualFile at all. */
+  /**
+   * An absolute path is no longer special-cased: the provider reads it as a relative path and resolves
+   * it against the application root, so it names nothing that exists. It still gets its placeholder
+   * node, because a configured path that resolves to nothing must never disappear from the view.
+   */
   public void testTreeBuildsWithNonExistentAbsoluteFolder() {
     addGrailsApp();
     List<String> paths = buildTreeAndCollectCustomFolderPaths(List.of("/no-such-home/aarone"));
 
     assertTrue("a non-existent absolute folder should still get its node",
                 paths.contains("/no-such-home/aarone"));
+
+    Collection<AbstractTreeNode<?>> applicationNodes = buildApplicationNodesFor(List.of("/no-such-home/aarone"));
+    AbstractTreeNode<?> node = customFolderNode(applicationNodes, "/no-such-home/aarone");
+    assertTrue("the path is read as relative and resolved against the application root, which it misses",
+               node instanceof GrailsMissingCustomFolderNode);
+    assertEquals("a folder that does not exist has nothing to expand",
+                 LeafState.ALWAYS, node.getLeafState());
   }
 
   /** Neither an unresolvable path nor a missing parent may suppress the node. */
@@ -141,6 +158,27 @@ public class GrailsCustomFoldersPaneTest extends GrailsTestCase {
   }
 
   /**
+   * A provider that fails is reported as an error on this node's logger, through the platform's error
+   * processor. A {@code warn} surfaces as an IDE error-report dialog instead, so the level is part of
+   * what the isolation try/catch owes the platform.
+   */
+  public void testFailingProviderIsLoggedAsError() {
+    registerProvider(new ThrowingNodeProvider(new IllegalStateException("provider blew up")));
+    configureCustomFolder("no-such-directory");
+
+    RecordingLoggedErrorProcessor processor = new RecordingLoggedErrorProcessor();
+    LoggedErrorProcessor.executeWith(processor, (ThrowableRunnable<RuntimeException>)() -> {
+      GrailsApplicationNode node = new GrailsApplicationNode(singleApplication(), ViewSettings.DEFAULT);
+      collectCustomFolderPaths(node.getChildren());
+    });
+
+    assertEquals("a failing provider must be logged exactly once: " + processor.myRecords,
+                 1, processor.myRecords.size());
+    assertTrue("expected an ERROR, got: " + processor.myRecords.get(0),
+               processor.myRecords.get(0).startsWith("ERROR "));
+  }
+
+  /**
    * The platform cancels a background read by throwing a control-flow exception, and retries the
    * build afterwards. Swallowing that would leave the pane on "Loading..." forever, so it must be
    * rethrown rather than treated as a provider failure.
@@ -158,17 +196,90 @@ public class GrailsCustomFoldersPaneTest extends GrailsTestCase {
     }
   }
 
+  /**
+   * FR48's {@code .github} fixture, observed through the node chain the pane builds rather than
+   * reasoned about: a hidden dot-directory inside the application renders as a real, expandable
+   * folder node — not as the placeholder, and not filtered away.
+   *
+   * <p>This is the rule the README and {@code IMPROVEMENT-PLAN.md} §2.8 state, and the one §2.8
+   * previously got wrong: the platform's default {@code Ignored Files and Folders} list matches named
+   * entries and glob suffixes, and carries no rule covering dot-directories. Both halves are asserted
+   * here, so neither the README nor §2.8 can drift back to an unverified generalisation.
+   */
+  public void testHiddenDotDirectoryRendersAsAnExpandableFolderNode() {
+    myFixture.addFileToProject(".github/workflows/ci.yml", "jobs: {}");
+    myFixture.addFileToProject(".git/config", "[core]");
+
+    Collection<AbstractTreeNode<?>> applicationNodes = buildApplicationNodesFor(List.of(".github"));
+    AbstractTreeNode<?> node = customFolderNode(applicationNodes, ".github");
+
+    assertTrue("an existing .github must get the navigable node, not the placeholder",
+                node instanceof GrailsCustomFolderNode);
+    assertTrue("the node's value is the directory, which is what makes it traversable",
+                ((GrailsCustomFolderNode)node).getValue() instanceof PsiDirectory);
+    assertEquals(".github is labelled with its folder name, dots and all", ".github", renderedLabel(node));
+    assertFalse(".github has content, so the folder must stay expandable", node.getChildren().isEmpty());
+
+    VirtualFile fixtureRoot = myFixture.getTempDirFixture().getFile("");
+    assertNotNull(fixtureRoot);
+    assertFalse(".github must not be ignored by the platform's default list",
+                isIgnored(fixtureRoot.findChild(".github")));
+    assertTrue(".git is the entry that list actually contains",
+               isIgnored(fixtureRoot.findChild(".git")));
+  }
+
+  /**
+   * FR48's absolute path, observed the same way: a directory that exists on disk but lies outside the
+   * Grails application is not resolved. The path is read relative to the application root, so it names
+   * nothing that exists and the pane renders the placeholder. That is the shape of the whole "no
+   * external directories" limitation, recorded here instead of being asserted twice in the docs.
+   */
+  public void testAbsolutePathOutsideTheApplicationRendersAsPlaceholder() {
+    // An absolute directory that exists on this machine and sits outside the application: /tmp does,
+    // and no relative reading of it can land inside the application root.
+    String outside = new java.io.File(System.getProperty("java.io.tmpdir")).getAbsolutePath();
+    assertTrue("the recorded outside directory must be absolute: " + outside, outside.startsWith("/"));
+
+    Collection<AbstractTreeNode<?>> applicationNodes = buildApplicationNodesFor(List.of(outside));
+    AbstractTreeNode<?> node = customFolderNode(applicationNodes, outside);
+
+    assertTrue("an absolute path resolves to nothing and keeps its placeholder",
+                node instanceof GrailsMissingCustomFolderNode);
+    assertEquals("a folder that does not exist has nothing to expand",
+                  LeafState.ALWAYS, node.getLeafState());
+    assertTrue("a placeholder has no children", node.getChildren().isEmpty());
+  }
+
+  /** The label the renderer shows, read through {@code update()} so decorators and postprocess run. */
+  private static @NotNull String renderedLabel(@NotNull AbstractTreeNode<?> node) {
+    node.update();
+    return node.getPresentation().getPresentableText();
+  }
+
+  private static boolean isIgnored(@NotNull VirtualFile file) {
+    return FileTypeRegistry.getInstance().isFileIgnored(file);
+  }
+
   /** Applies one folder and asserts its node is still built through the application's children. */
   private void assertCustomFolderNodeSurvives(@NotNull String folder) {
+    configureCustomFolder(folder);
+
+    // The provider failure is now logged at error level, which the test framework reports as a test
+    // failure unless a processor swallows it; the node surviving it is what this test asserts.
+    LoggedErrorProcessor.executeWith(new RecordingLoggedErrorProcessor(), (ThrowableRunnable<RuntimeException>)() -> {
+      GrailsApplicationNode node = new GrailsApplicationNode(singleApplication(), ViewSettings.DEFAULT);
+
+      assertTrue("a failing provider must not remove the custom folder node",
+                 collectCustomFolderPaths(node.getChildren()).contains(folder));
+    });
+  }
+
+  /** Applies one folder to the application the pane will build its children for. */
+  private void configureCustomFolder(@NotNull String folder) {
     addGrailsApp();
     createApplicationProperties();
     PlatformTestUtil.waitForFuture(GrailsApplicationManager.getInstance(getProject()).queueUpdate(), 5_000);
     getProject().getService(GrailsCustomFoldersProjectService.class).setFolders(List.of(folder));
-
-    GrailsApplicationNode node = new GrailsApplicationNode(singleApplication(), ViewSettings.DEFAULT);
-
-    assertTrue("a failing provider must not remove the custom folder node",
-               collectCustomFolderPaths(node.getChildren()).contains(folder));
   }
 
   private void registerProvider(@NotNull GrailsViewNodeProvider provider) {
@@ -188,6 +299,34 @@ public class GrailsCustomFoldersPaneTest extends GrailsTestCase {
     public @NotNull Collection<AbstractTreeNode<?>> createNodes(@NotNull GrailsApplication application,
                                                                 @NotNull ViewSettings settings) {
       throw myFailure;
+    }
+  }
+
+  /**
+   * Records what reaches the {@code GrailsApplicationNode} logger, so a provider failure can be
+   * asserted to be reported as an error rather than as a warning.
+   */
+  private static final class RecordingLoggedErrorProcessor extends LoggedErrorProcessor {
+
+    private final @NotNull List<String> myRecords = new ArrayList<>();
+
+    @Override
+    public @NotNull Set<Action> processError(@NotNull String category, @NotNull String message, String[] details, Throwable t) {
+      record(category, "ERROR " + message);
+      return EnumSet.noneOf(Action.class);
+    }
+
+    @Override
+    public boolean processWarn(@NotNull String category, @NotNull String message, Throwable t) {
+      record(category, "WARN " + message);
+      return false;
+    }
+
+    private void record(@NotNull String category, @NotNull String record) {
+      // Logger.getInstance(Class) registers the category with a leading '#', so match on the suffix.
+      if (category.endsWith(LOGGER_CATEGORY)) {
+        myRecords.add(record);
+      }
     }
   }
 
@@ -256,15 +395,18 @@ public class GrailsCustomFoldersPaneTest extends GrailsTestCase {
    * every node provider runs.
    */
   private @NotNull List<String> buildTreeAndCollectCustomFolderPaths(@NotNull List<String> folders) {
+    Collection<AbstractTreeNode<?>> applicationNodes = buildApplicationNodesFor(folders);
+    assertTrue("the fixture must yield at least one application node, so the tree really was built",
+               !applicationNodes.isEmpty());
+    return collectCustomFolderPaths(applicationNodes);
+  }
+
+  private @NotNull Collection<AbstractTreeNode<?>> buildApplicationNodesFor(@NotNull List<String> folders) {
     createApplicationProperties();
     PlatformTestUtil.waitForFuture(GrailsApplicationManager.getInstance(getProject()).queueUpdate(), 5_000);
     singleApplication();
     getProject().getService(GrailsCustomFoldersProjectService.class).setFolders(folders);
-
-    Collection<AbstractTreeNode<?>> applicationNodes = buildApplicationNodes();
-    assertTrue("the fixture must yield at least one application node, so the tree really was built",
-               !applicationNodes.isEmpty());
-    return collectCustomFolderPaths(applicationNodes);
+    return buildApplicationNodes();
   }
 
   /** The application's child nodes, as the pane builds them: every node provider runs here. */
@@ -279,10 +421,21 @@ public class GrailsCustomFoldersPaneTest extends GrailsTestCase {
     return nodes;
   }
 
+  /** The node for one configured path, so the node kind and its leaf state can be pinned. */
+  private static @NotNull AbstractTreeNode<?> customFolderNode(@NotNull Collection<AbstractTreeNode<?>> nodes,
+                                                               @NotNull String configuredPath) {
+    for (AbstractTreeNode<?> node : nodes) {
+      if (node instanceof GrailsCustomFolder folder && configuredPath.equals(folder.getConfiguredPath())) {
+        return node;
+      }
+    }
+    throw new AssertionError("no custom folder node for " + configuredPath + " among " + nodes);
+  }
+
   private static @NotNull List<String> collectCustomFolderPaths(@NotNull Collection<AbstractTreeNode<?>> nodes) {
     List<String> paths = new ArrayList<>();
     for (AbstractTreeNode<?> node : nodes) {
-      if (node instanceof GrailsCustomFolderNode folder) {
+      if (node instanceof GrailsCustomFolder folder) {
         paths.add(folder.getConfiguredPath());
       }
     }
@@ -299,22 +452,18 @@ public class GrailsCustomFoldersPaneTest extends GrailsTestCase {
     myFixture.addFileToProject("grails-app/i18n/messages.properties", "greeting=hello");
   }
 
-  
-
   /**
    * {@code TestGrailsApplicationProvider} only reports an application that has
-   * application.properties. It may already exist (created by the fixture), so write through the VFS
-   * instead of the fixture, which refuses to overwrite.
+   * {@code application.properties}, which an earlier test in the same fixture may have written
+   * already. It is a <em>file</em>, so it is created through the fixture's file API and its content
+   * replaced through {@code saveText}; resolving the path with the directory API creates a directory
+   * of that name and then writes content into a directory.
    */
   private void createApplicationProperties() {
-    WriteAction.runAndWait(() -> {
-      try {
-        VirtualFile properties = myFixture.getTempDirFixture().findOrCreateDir("application.properties");
-        properties.setBinaryContent("app.grails.version=7.0.0\napp.name=TestApp\n".getBytes(StandardCharsets.UTF_8));
-      }
-      catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    });
+    VirtualFile properties = myFixture.getTempDirFixture().getFile("application.properties");
+    if (properties == null) {
+      properties = myFixture.getTempDirFixture().createFile("application.properties");
+    }
+    myFixture.saveText(properties, "app.grails.version=7.0.0\napp.name=TestApp\n");
   }
 }

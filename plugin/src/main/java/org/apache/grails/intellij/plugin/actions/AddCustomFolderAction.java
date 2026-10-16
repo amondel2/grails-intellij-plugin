@@ -20,15 +20,18 @@ package org.apache.grails.intellij.plugin.actions;
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDirectory;
-import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiManager;
+import org.apache.grails.intellij.plugin.GrailsBundle;
+import org.apache.grails.intellij.plugin.config.FolderPaths;
+import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersAppService;
 import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService;
+import org.apache.grails.intellij.plugin.structure.GrailsApplication;
+import org.apache.grails.intellij.plugin.structure.GrailsApplicationManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -44,18 +47,31 @@ public class AddCustomFolderAction extends DumbAwareAction {
       e.getPresentation().setEnabledAndVisible(false);
       return;
     }
-    PsiDirectory directory = getSelectedDirectory(e);
-    if (directory == null || isProjectRoot(project, directory)) {
+    PsiDirectory directory = CustomFolderSelection.directory(e);
+    GrailsApplication application = applicationOf(project, directory);
+    if (directory == null || application == null || isApplicationRoot(application, directory)) {
       e.getPresentation().setEnabledAndVisible(false);
       return;
     }
 
     GrailsCustomFoldersProjectService service = project.getService(GrailsCustomFoldersProjectService.class);
-    if (service.getFolders().size() >= GrailsCustomFoldersProjectService.MAX_FOLDERS) {
+    String path = relativeToApplicationRoot(application, directory);
+    // Both no-ops: a folder the Grails view already renders is the one right-clicked in the tree, and
+    // a directory outside the application root has no path to store against that base. Hidden rather
+    // than disabled, because neither is a state the user can act their way out of.
+    if (path == null || isAlreadyConfigured(service, path)) {
+      e.getPresentation().setEnabledAndVisible(false);
+      return;
+    }
+
+    // The cap counts what the Grails view will show, which is this project's folders plus the global
+    // defaults, so a project with one folder and five global ones is already at six.
+    int max = GrailsCustomFoldersAppService.getStaticInstance().getMaxFolders();
+    if (service.getEffectiveFolders().size() >= max) {
       e.getPresentation().setVisible(true);
       e.getPresentation().setEnabled(false);
       e.getPresentation().setDescription(
-          "Maximum of " + GrailsCustomFoldersProjectService.MAX_FOLDERS + " custom folders reached. Remove one first.");
+          GrailsBundle.message("grails.settings.custom.folders.cap.reached", max));
     }
     else {
       e.getPresentation().setEnabledAndVisible(true);
@@ -69,44 +85,73 @@ public class AddCustomFolderAction extends DumbAwareAction {
 
   @Override
   public void actionPerformed(@NotNull AnActionEvent e) {
+    // No read action is taken here, so nothing here may touch PSI or the VFS on its own; the one
+    // lookup this path needs lives in CustomFolderSelection and is already wrapped.
     Project project = e.getProject();
-    PsiDirectory directory = getSelectedDirectory(e);
+    PsiDirectory directory = CustomFolderSelection.directory(e);
     if (project == null || directory == null) return;
-    if (isProjectRoot(project, directory)) return;
+    GrailsApplication application = applicationOf(project, directory);
+    if (application == null || isApplicationRoot(application, directory)) return;
 
-    VirtualFile virtualFile = directory.getVirtualFile();
-    String path = VfsUtilCore.getRelativePath(virtualFile, project.getBaseDir(), '/');
-    if (path == null) {
-      path = virtualFile.getPath();
-    }
+    String path = relativeToApplicationRoot(application, directory);
+    if (path == null) return;
 
     GrailsCustomFoldersProjectService service = project.getService(GrailsCustomFoldersProjectService.class);
     List<String> folders = new ArrayList<>(service.getFolders());
-    if (!folders.contains(path)) {
+    // The same guard update() hides the action behind, so a user-mapped shortcut cannot store what
+    // the context menu refuses to offer. Comparing the effective folders rather than this project's
+    // own list is what keeps a global default from being promoted into a project override.
+    if (!isAlreadyConfigured(service, path)) {
       folders.add(path);
       service.setFolders(folders);
     }
   }
 
   /**
-   * The project root is already the top of the Grails view — adding it as a custom folder would
-   * duplicate the whole project under the application node, so the action stays hidden for it
-   * in every pane.
+   * Looked up under a read action because {@code findApplication} walks the content roots, which is
+   * model access, and {@code update()} runs on BGT with no read action of its own. {@code update()}
+   * and {@code actionPerformed()} share it so the two always agree on which application a directory
+   * belongs to.
    */
-  private static boolean isProjectRoot(@NotNull Project project, @NotNull PsiDirectory directory) {
-    VirtualFile baseDir = project.getBaseDir();
-    return baseDir != null && baseDir.equals(directory.getVirtualFile());
+  private static @Nullable GrailsApplication applicationOf(@NotNull Project project, @Nullable PsiDirectory directory) {
+    if (directory == null) return null;
+    VirtualFile file = directory.getVirtualFile();
+    return ReadAction.computeBlocking(
+      () -> GrailsApplicationManager.getInstance(project).findApplication(file));
   }
 
-  private static @Nullable PsiDirectory getSelectedDirectory(@NotNull AnActionEvent e) {
-    PsiElement element = e.getData(CommonDataKeys.PSI_ELEMENT);
-    if (element instanceof PsiDirectory) {
-      return (PsiDirectory)element;
+  /**
+   * The path this action would store for the directory, or null when the directory does not sit under
+   * the application root. The provider resolves a relative path against the application root, so that
+   * is the only base that round-trips; an absolute path stored here would look for
+   * {@code <root>/<absolute>} there.
+   */
+  private static @Nullable String relativeToApplicationRoot(@NotNull GrailsApplication application,
+                                                            @NotNull PsiDirectory directory) {
+    return VfsUtilCore.getRelativePath(directory.getVirtualFile(), application.getRoot(), '/');
+  }
+
+  /**
+   * Whether the path is already one of the folders the Grails view renders — this project's own or a
+   * global default, which the pane shows too. Compared after {@link FolderPaths#normalize} because a
+   * configured {@code docs/} and a selected {@code docs} are the same folder to the provider, even
+   * though they are different strings.
+   */
+  private static boolean isAlreadyConfigured(@NotNull GrailsCustomFoldersProjectService service,
+                                             @NotNull String path) {
+    String normalized = FolderPaths.normalize(path);
+    for (String folder : service.getEffectiveFolders()) {
+      if (FolderPaths.normalize(folder).equals(normalized)) return true;
     }
-    VirtualFile virtualFile = e.getData(CommonDataKeys.VIRTUAL_FILE);
-    if (virtualFile != null && virtualFile.isDirectory()) {
-      return PsiManager.getInstance(e.getProject()).findDirectory(virtualFile);
-    }
-    return null;
+    return false;
+  }
+
+  /**
+   * The application root is already the top of the Grails view — adding it as a custom folder would
+   * duplicate the whole application under the application node, so the action stays hidden for it
+   * in every pane.
+   */
+  private static boolean isApplicationRoot(@NotNull GrailsApplication application, @NotNull PsiDirectory directory) {
+    return application.getRoot().equals(directory.getVirtualFile());
   }
 }

@@ -19,15 +19,12 @@
 
 package org.apache.grails.intellij.plugin.config;
 
-import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.components.StoragePathMacros;
 import com.intellij.openapi.project.Project;
 import com.intellij.util.messages.Topic;
-import org.apache.grails.intellij.plugin.projectView.GrailsProjectViewPanes;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -38,7 +35,6 @@ import java.util.Set;
 
 @State(name = "GrailsCustomFolders", storages = @Storage(StoragePathMacros.WORKSPACE_FILE))
 public final class GrailsCustomFoldersProjectService implements PersistentStateComponent<GrailsCustomFoldersProjectService.StateHolder> {
-  public static final int MAX_FOLDERS = 3;
 
   private final Project project;
 
@@ -54,41 +50,37 @@ public final class GrailsCustomFoldersProjectService implements PersistentStateC
 
   public void setFolders(@NotNull List<String> folders) {
     this.folders = clean(folders);
-    // Repaint on the UI thread: this runs from the settings dialog and from the tree actions, and the
-    // pane must be updated on the EDT. Going through the pane directly is what makes the view react
-    // immediately; the event below is only a notification for anything else listening.
     project.getMessageBus().syncPublisher(FoldersChangedListener.TOPIC).foldersChanged();
-    ApplicationManager.getApplication().invokeLater(() -> GrailsProjectViewPanes.refresh(project),
-                                                    ModalityState.defaultModalityState(), project.getDisposed());
   }
 
   /**
-   * Returns the folders the Grails view shows for this project: this project's own folders
-   * first, then the global defaults, with the total limited to {@link #MAX_FOLDERS}. A folder
-   * configured in both areas appears once — duplicates are detected after
+   * Returns the folders the Grails view shows for this project: this project's own folders first,
+   * then the global defaults, with the total limited to the configured cap. A folder configured in
+   * both areas appears once — duplicates are detected after
    * {@link FolderPaths#normalize(String)}.
    */
   public @NotNull List<String> getEffectiveFolders() {
-    return Collections.unmodifiableList(combine(folders, GrailsCustomFoldersAppService.getStaticInstance().getFolders()));
+    GrailsCustomFoldersAppService appService = GrailsCustomFoldersAppService.getStaticInstance();
+    return Collections.unmodifiableList(combine(folders, appService.getFolders(), appService.getMaxFolders()));
   }
 
   /**
    * Combines this project's folders with the global defaults the way the Grails view shows them:
    * the project's own folders first (they are the more specific configuration), then the global
-   * defaults, with the total limited to {@link #MAX_FOLDERS}. Duplicates (after
-   * {@link FolderPaths#normalize(String)}) are dropped.
+   * defaults, keeping only the first {@code max} unique ones (after
+   * {@link FolderPaths#normalize(String)}).
    */
-  static @NotNull List<String> combine(@NotNull List<String> projectFolders, @NotNull List<String> globalFolders) {
+  static @NotNull List<String> combine(@NotNull List<String> projectFolders, @NotNull List<String> globalFolders, int max) {
     List<String> effective = new ArrayList<>();
     Set<String> seen = new HashSet<>();
     for (String folder : projectFolders) {
-      if (effective.size() >= MAX_FOLDERS) break;
+      if (effective.size() >= max) break;
       if (seen.add(FolderPaths.normalize(folder))) {
         effective.add(folder);
       }
     }
     for (String folder : globalFolders) {
-      if (effective.size() >= MAX_FOLDERS) break;
+      if (effective.size() >= max) break;
       if (seen.add(FolderPaths.normalize(folder))) {
         effective.add(folder);
       }
@@ -96,21 +88,9 @@ public final class GrailsCustomFoldersProjectService implements PersistentStateC
     return effective;
   }
 
+  /** Nothing is truncated here: the cap limits what the view renders, not what is configured. */
   static @NotNull List<String> clean(@NotNull List<String> raw) {
-    List<String> res = new ArrayList<>();
-    Set<String> seen = new HashSet<>();
-    for (String folder : raw) {
-      if (folder == null) continue;
-      String trimmed = folder.trim();
-      if (trimmed.isEmpty()) continue;
-      String normalized = FolderPaths.normalize(trimmed);
-      if (normalized.isEmpty()) continue;
-      if (seen.add(normalized)) {
-        res.add(trimmed);
-      }
-      if (res.size() >= MAX_FOLDERS) break;
-    }
-    return res;
+    return FolderPaths.dedupe(raw);
   }
 
   @Override
