@@ -45,6 +45,16 @@ public class GrailsPluginsNode extends ProjectViewNode<String> {
     return (GrailsApplication)getParentValue();
   }
 
+  /**
+   * Plugins are found by a class search across every dependency and a walk of each library's META-INF.
+   * Drawing the arrow unconditionally keeps that work off the path that lists the application's children;
+   * see {@link org.apache.grails.intellij.plugin.projectView.nodes.GrailsArtefactHandlerNode#isAlwaysShowPlus()}.
+   */
+  @Override
+  public boolean isAlwaysShowPlus() {
+    return true;
+  }
+
   @Override
   public @NotNull Collection<AbstractTreeNode<?>> getChildren() {
     GrailsApplication application = getGrailsApplication();

@@ -49,6 +49,15 @@ public class GrailsApplicationNode extends ProjectViewNode<GrailsApplication> {
     return getValue().isValid() && super.shouldUpdateData();
   }
 
+  /**
+   * An application always has children (every application gets its artefact groups), so building them to
+   * decide on the arrow learns nothing; see {@link GrailsArtefactHandlerNode#isAlwaysShowPlus()}.
+   */
+  @Override
+  public boolean isAlwaysShowPlus() {
+    return true;
+  }
+
   @Override
   public @NotNull Collection<AbstractTreeNode<?>> getChildren() {
     Collection<AbstractTreeNode<?>> result = new ArrayList<>();
