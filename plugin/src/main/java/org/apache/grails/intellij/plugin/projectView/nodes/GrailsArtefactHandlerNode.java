@@ -43,6 +43,18 @@ public class GrailsArtefactHandlerNode extends GrailsArtefactHandlerNodeBase<Gra
     return getValue();
   }
 
+  /**
+   * The group's contents come from index searches over the application. With the default leaf state the
+   * platform counts a node's children as soon as its parent is listed, to decide whether to draw the expand
+   * arrow, so opening the application node ran every group's search before anything was shown. Always
+   * drawing the arrow defers each search until the group itself is expanded, which is how the Project view
+   * treats directories; a group that turns out empty loses its arrow once opened.
+   */
+  @Override
+  public boolean isAlwaysShowPlus() {
+    return true;
+  }
+
   @Override
   protected void update(@NotNull PresentationData presentation) {
     presentation.setIcon(getValue().getGroupIcon());

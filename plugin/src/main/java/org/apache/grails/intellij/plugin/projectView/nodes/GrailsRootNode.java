@@ -27,6 +27,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
+import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService;
 import org.apache.grails.intellij.plugin.gradle.GrailsGradleSyncStatus;
 import org.apache.grails.intellij.plugin.structure.GrailsApplication;
 import org.apache.grails.intellij.plugin.structure.GrailsApplicationManager;
@@ -63,6 +64,7 @@ public class GrailsRootNode extends ProjectViewNode<Project> {
   public boolean contains(@NotNull VirtualFile file) {
     Project project = getValue();
     if (GrailsApplicationManager.getInstance(project).findApplication(file) != null) return true;
+    if (project.getService(GrailsCustomFoldersProjectService.class).isInCustomFolder(file)) return true;
     for (GrailsGradleSyncStatus.BlockedGrailsRoot blocked : GrailsGradleSyncStatus.getInstance(project).findBlockedGrailsRoots()) {
       if (VfsUtilCore.isAncestor(blocked.root(), file, false)) return true;
     }

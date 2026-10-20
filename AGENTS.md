@@ -198,6 +198,15 @@ Related: the Grails pane builds children in a background thread (`isToBuildChild
 `GrailsProjectViewPane`), so nodes are built more than once and a node's identity hash changes
 between builds — do not read that as a bug.
 
+**Nodes with expensive children must not keep the default leaf state.** `StructureTreeModel` decides
+whether to draw a child's expand arrow by building that child's children as soon as its parent is listed
+(`LeafState.DEFAULT`), so a default-state artefact group ran its index search when the application node
+opened, not when the group did, and the pane sat on "Loading...". `GrailsApplicationNode`,
+`GrailsArtefactHandlerNode` and `GrailsPluginsNode` override `isAlwaysShowPlus()` to defer that, which is
+what `PsiDirectoryNode` already does for local directories; `GrailsNodeLeafStateTest` pins it through a
+real `StructureTreeModel`. Keep the per-group work itself cheap too: `GrailsArtefacts` walks the handler's
+directory rather than running `AllClassesSearch` over every class name in the scope.
+
 `GrailsViewItems.isHiddenFromOtherSources` is the single definition of "hidden from Other sources",
 consulted by both the `assets` child filter and `OtherGrailsAppSourcesNode.contains()`. Two
 independent implementations of that rule is what caused the nested-vendor-asset regression in

@@ -21,6 +21,7 @@ package org.apache.grails.intellij.plugin.artefact.impl;
 
 import com.intellij.codeInsight.AnnotationUtil;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VfsUtilCore;
@@ -30,11 +31,10 @@ import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiManager;
 import com.intellij.psi.PsiModifierList;
 import com.intellij.psi.PsiPackage;
 import com.intellij.psi.search.GlobalSearchScope;
-import com.intellij.psi.search.GlobalSearchScopesCore;
-import com.intellij.psi.search.searches.AllClassesSearch;
 import com.intellij.psi.search.searches.AnnotatedElementsSearch;
 import com.intellij.psi.util.CachedValue;
 import com.intellij.psi.util.CachedValueProvider.Result;
@@ -51,6 +51,7 @@ import org.apache.grails.intellij.plugin.artefact.api.HandlerCache;
 import org.apache.grails.intellij.plugin.structure.GrailsApplication;
 import org.apache.grails.intellij.plugin.structure.GrailsApplicationManager;
 import org.jetbrains.plugins.groovy.GroovyFileType;
+import org.jetbrains.plugins.groovy.lang.psi.GroovyFile;
 import org.jetbrains.plugins.groovy.lang.psi.api.statements.typedef.GrTypeDefinition;
 import org.jetbrains.plugins.groovy.lang.psi.impl.GrAnnotationUtil;
 
@@ -113,27 +114,35 @@ public final class GrailsArtefacts {
    * - its name has specified suffix
    * - its name if the same as the name of file
    * - it is defined in a groovy file which lies under specified directory
+   *
+   * <p>The directory is walked rather than searched with {@code AllClassesSearch}. That search enumerates
+   * every class name the indexes hold for the scope, libraries included, and the Grails view ran it once
+   * per artefact group on every refresh. The directory holds the application's own sources, so walking it
+   * costs what the group is worth and nothing more; the file name must equal the class name anyway, so
+   * the suffix test needs no class before the file is even opened.
    */
   private static @Nullable Collection<PsiClass> collectConventionalArtefacts(@NotNull GrailsArtefactHandler handler,
                                                                              @NotNull GrailsApplication application,
                                                                              @NotNull GlobalSearchScope scope) {
-    Project project = application.getProject();
     VirtualFile directory = handler.getDirectory(application);
     if (directory == null) return null;
 
-    GlobalSearchScope artefactDirectoryScope = GlobalSearchScopesCore.directoryScope(project, directory, true);
-    GlobalSearchScope resultScope = artefactDirectoryScope.intersectWith(scope);
     String suffix = handler.getArtefactClassSuffix();
+    PsiManager psiManager = PsiManager.getInstance(application.getProject());
 
     List<PsiClass> result = new ArrayList<>();
-    for (PsiClass artefactClass : AllClassesSearch.search(resultScope, project, className -> className.endsWith(suffix)).findAll()) {
-      VirtualFile file = virtualFileOf(artefactClass);
-      if (file != null
-          && file.getNameWithoutExtension().equals(artefactClass.getName())
-          && file.getFileType() == GroovyFileType.GROOVY_FILE_TYPE) {
-        result.add(artefactClass);
+    VfsUtilCore.iterateChildrenRecursively(directory, null, file -> {
+      ProgressManager.checkCanceled();
+      if (file.isDirectory()) return true;
+      String name = file.getNameWithoutExtension();
+      if (!name.endsWith(suffix) || file.getFileType() != GroovyFileType.GROOVY_FILE_TYPE || !scope.contains(file)) return true;
+      if (psiManager.findFile(file) instanceof GroovyFile groovyFile) {
+        for (PsiClass artefactClass : groovyFile.getClasses()) {
+          if (name.equals(artefactClass.getName())) result.add(artefactClass);
+        }
       }
-    }
+      return true;
+    });
     return result;
   }
 

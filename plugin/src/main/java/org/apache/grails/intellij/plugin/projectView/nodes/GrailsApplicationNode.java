@@ -23,11 +23,14 @@ import com.intellij.ide.projectView.PresentationData;
 import com.intellij.ide.projectView.ProjectViewNode;
 import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
+import com.intellij.openapi.diagnostic.ControlFlowException;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.SimpleTextAttributes;
 import org.jetbrains.annotations.NotNull;
 import org.apache.grails.intellij.plugin.GrailsBundle;
+import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService;
 import org.apache.grails.intellij.plugin.projectView.api.GrailsViewNodeProvider;
 import org.apache.grails.intellij.plugin.structure.GrailsApplication;
 import org.apache.grails.intellij.plugin.structure.GrailsApplicationManager;
@@ -46,11 +49,34 @@ public class GrailsApplicationNode extends ProjectViewNode<GrailsApplication> {
     return getValue().isValid() && super.shouldUpdateData();
   }
 
+  /**
+   * An application always has children (every application gets its artefact groups), so building them to
+   * decide on the arrow learns nothing; see {@link GrailsArtefactHandlerNode#isAlwaysShowPlus()}.
+   */
+  @Override
+  public boolean isAlwaysShowPlus() {
+    return true;
+  }
+
   @Override
   public @NotNull Collection<AbstractTreeNode<?>> getChildren() {
     Collection<AbstractTreeNode<?>> result = new ArrayList<>();
     for (GrailsViewNodeProvider provider : GrailsViewNodeProvider.EP_NAME.getExtensionList()) {
-      result.addAll(provider.createNodes(getValue(), getSettings()));
+      try {
+        result.addAll(provider.createNodes(getValue(), getSettings()));
+      }
+      catch (RuntimeException | LinkageError e) {
+        // The pane builds children on a background thread and a throw there aborts the whole repaint,
+        // blanking the Grails view. One broken provider must not take the others down with it.
+        // Control-flow exceptions are the exception to that: the platform cancels a background read
+        // like this when a write action becomes pending and retries the build afterwards, so
+        // swallowing one strands the pane on "Loading...". Rethrow those untouched.
+        if (e instanceof ControlFlowException) {
+          throw e;
+        }
+        Logger.getInstance(GrailsApplicationNode.class)
+          .error("Grails view provider " + provider.getClass().getName() + " failed; skipping its nodes", e);
+      }
     }
     return result;
   }
@@ -58,7 +84,10 @@ public class GrailsApplicationNode extends ProjectViewNode<GrailsApplication> {
   @Override
   public boolean contains(@NotNull VirtualFile file) {
     Project project = getProject();
-    return project != null && GrailsApplicationManager.getInstance(project).findApplication(file) == getValue();
+    if (project == null) return false;
+    GrailsApplication application = getValue();
+    return GrailsApplicationManager.getInstance(project).findApplication(file) == application
+           || project.getService(GrailsCustomFoldersProjectService.class).isInCustomFolder(application.getRoot(), file);
   }
 
   @Override
