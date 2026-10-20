@@ -28,9 +28,14 @@ import com.intellij.ide.util.treeView.AbstractTreeNode;
 import com.intellij.ide.util.treeView.NodeDescriptor;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.psi.PsiFileSystemItem;
+import com.intellij.psi.util.PsiUtilCore;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.apache.grails.intellij.plugin.GroovyMvcIcons;
 import org.apache.grails.intellij.plugin.config.GrailsConstants;
+import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService;
 import org.apache.grails.intellij.plugin.projectView.impl.GrailsNodeComparator;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsRootNode;
 
@@ -131,5 +136,19 @@ public final class GrailsProjectViewPane extends AbstractProjectViewPaneWithAsyn
     public float getWeight() {
       return 5.239f;
     }
+
+    /**
+     * The platform only selects files that belong to the project; a file in a custom folder outside
+     * it is in the Grails view too, so *Select Opened File* and autoscroll may reach it.
+     */
+    @Override
+    protected boolean canSelect(PsiFileSystemItem file) {
+      return super.canSelect(file) || isInCustomFolder(myProject, PsiUtilCore.getVirtualFile(file));
+    }
+  }
+
+  static boolean isInCustomFolder(@NotNull Project project, @Nullable VirtualFile file) {
+    return file != null && file.isValid()
+           && project.getService(GrailsCustomFoldersProjectService.class).isInCustomFolder(file);
   }
 }

@@ -41,17 +41,31 @@ import java.util.List;
 public final class GrailsMissingCustomFolderNode extends AbstractTreeNode<String> implements GrailsCustomFolder {
 
   private final String configuredPath;
+  private final int position;
 
   public GrailsMissingCustomFolderNode(@NotNull Project project,
                                        @NotNull ViewSettings settings,
                                        @NotNull String configuredPath) {
+    this(project, settings, configuredPath, 0);
+  }
+
+  public GrailsMissingCustomFolderNode(@NotNull Project project,
+                                       @NotNull ViewSettings settings,
+                                       @NotNull String configuredPath,
+                                       int position) {
     super(project, configuredPath);
     this.configuredPath = configuredPath;
+    this.position = position;
   }
 
   @Override
   public @NotNull String getConfiguredPath() {
     return configuredPath;
+  }
+
+  @Override
+  public int getPosition() {
+    return position;
   }
 
   @Override

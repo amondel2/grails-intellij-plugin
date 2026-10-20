@@ -59,7 +59,7 @@ public class AddCustomFolderAction extends DumbAwareAction {
     // Both no-ops: a folder the Grails view already renders is the one right-clicked in the tree, and
     // a directory outside the application root has no path to store against that base. Hidden rather
     // than disabled, because neither is a state the user can act their way out of.
-    if (path == null || isAlreadyConfigured(service, path)) {
+    if (path == null || isAlreadyConfigured(service, application, directory, path)) {
       e.getPresentation().setEnabledAndVisible(false);
       return;
     }
@@ -101,7 +101,7 @@ public class AddCustomFolderAction extends DumbAwareAction {
     // The same guard update() hides the action behind, so a user-mapped shortcut cannot store what
     // the context menu refuses to offer. Comparing the effective folders rather than this project's
     // own list is what keeps a global default from being promoted into a project override.
-    if (!isAlreadyConfigured(service, path)) {
+    if (!isAlreadyConfigured(service, application, directory, path)) {
       folders.add(path);
       service.setFolders(folders);
     }
@@ -132,18 +132,25 @@ public class AddCustomFolderAction extends DumbAwareAction {
   }
 
   /**
-   * Whether the path is already one of the folders the Grails view renders — this project's own or a
-   * global default, which the pane shows too. Compared after {@link FolderPaths#normalize} because a
-   * configured {@code docs/} and a selected {@code docs} are the same folder to the provider, even
-   * though they are different strings.
+   * Whether the directory is already one of the folders the Grails view renders — this project's own
+   * or a global default, which the pane shows too. Compared after {@link FolderPaths#normalize}
+   * because a configured {@code docs/} and a selected {@code docs} are the same folder to the
+   * provider, and by what each configured path resolves to, because an absolute path or one that
+   * climbs out with {@code ..} can name the same directory in another spelling.
    */
   private static boolean isAlreadyConfigured(@NotNull GrailsCustomFoldersProjectService service,
+                                             @NotNull GrailsApplication application,
+                                             @NotNull PsiDirectory directory,
                                              @NotNull String path) {
     String normalized = FolderPaths.normalize(path);
-    for (String folder : service.getEffectiveFolders()) {
-      if (FolderPaths.normalize(folder).equals(normalized)) return true;
-    }
-    return false;
+    VirtualFile file = directory.getVirtualFile();
+    return ReadAction.computeBlocking(() -> {
+      for (String folder : service.getEffectiveFolders()) {
+        if (FolderPaths.normalize(folder).equals(normalized)) return true;
+        if (file.equals(FolderPaths.find(application.getRoot(), folder))) return true;
+      }
+      return false;
+    });
   }
 
   /**

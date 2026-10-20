@@ -332,6 +332,22 @@ public class CustomFoldersActionTest extends GrailsTestCase {
   }
 
   /**
+   * A folder configured by a path that climbs out and back in names the same directory in another
+   * spelling, which normalizing the strings cannot see; comparing what the path resolves to does.
+   */
+  public void testAddUpdateInvisibleWhenConfiguredByAPathThatResolvesToTheSameFolder() {
+    PsiDirectory directory = createDirectory("docs");
+    VirtualFile root = directory.getVirtualFile().getParent();
+    service().setFolders(List.of("../" + root.getName() + "/docs"));
+
+    AddCustomFolderAction action = new AddCustomFolderAction();
+    AnActionEvent event = event(data(CommonDataKeys.PROJECT, getProject(), CommonDataKeys.PSI_ELEMENT, directory));
+
+    assertFalse("a folder the Grails view already renders, under any spelling, must not offer Add",
+                updateOffEdt(action, event).isVisible());
+  }
+
+  /**
    * A global default renders in this project's view too, so it counts as already configured even
    * though this project's own list is empty.
    */

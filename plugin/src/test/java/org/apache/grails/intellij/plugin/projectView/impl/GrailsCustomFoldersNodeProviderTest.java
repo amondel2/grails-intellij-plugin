@@ -28,21 +28,26 @@ import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiFileSystemItem;
 import com.intellij.psi.PsiManager;
 import com.intellij.testFramework.PlatformTestUtil;
 import com.intellij.ui.tree.LeafState;
 import com.intellij.ui.tree.TreeVisitor;
 import org.jetbrains.annotations.NotNull;
+import org.apache.grails.intellij.plugin.config.GrailsConstants;
 import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersAppService;
 import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService;
+import org.apache.grails.intellij.plugin.config.OutsideProjectDirectory;
 import org.apache.grails.intellij.plugin.projectView.NodeWeights;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsCustomFolder;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsCustomFolderNode;
+import org.apache.grails.intellij.plugin.projectView.nodes.GrailsExternalDirectoryNode;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsMissingCustomFolderNode;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsPsiDirectoryNode;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
 
@@ -66,8 +71,8 @@ public class GrailsCustomFoldersNodeProviderTest extends GrailsNodeProviderTestS
       assertEquals("every custom folder node carries the custom-folder weight",
                    NodeWeights.CUSTOM_FOLDER, node.getNodeWeight());
     }
-    assertEquals("each node is labelled with its folder name",
-                 List.of(".github", "build", "docs"),
+    assertEquals("each node is labelled with its folder name, in the order configured",
+                 List.of("docs", ".github", "build"),
                  nodes.stream().map(GrailsCustomFoldersNodeProviderTest::label).toList());
   }
 
@@ -82,8 +87,8 @@ public class GrailsCustomFoldersNodeProviderTest extends GrailsNodeProviderTestS
       List<GrailsCustomFolder> nodes = customFolderNodes(
         new GrailsCustomFoldersNodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT));
 
-      assertEquals("global defaults and project folders each produce a node",
-                   List.of("docs", "src"),
+      assertEquals("global defaults and project folders each produce a node, this project's first",
+                   List.of("src", "docs"),
                    nodes.stream().map(GrailsCustomFoldersNodeProviderTest::label).toList());
     });
   }
@@ -216,7 +221,8 @@ public class GrailsCustomFoldersNodeProviderTest extends GrailsNodeProviderTestS
     assertFalse("a trailing backslash still resolves the existing folder", node.getChildren().isEmpty());
   }
 
-  public void testNodesSortedAlphabeticallyByLabel() {
+  /** The configured order is the rendered order; nothing re-sorts the folders by name. */
+  public void testNodesKeepTheConfiguredOrder() {
     myFixture.addFileToProject("zebra/z.txt", "");
     myFixture.addFileToProject("alpha/a.txt", "");
     myFixture.addFileToProject("middle/m.txt", "");
@@ -227,30 +233,91 @@ public class GrailsCustomFoldersNodeProviderTest extends GrailsNodeProviderTestS
     List<GrailsCustomFolder> nodes = customFolderNodes(
       new GrailsCustomFoldersNodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT));
 
-    assertEquals("nodes are ordered alphabetically by label regardless of configuration order",
-                 List.of("alpha", "middle", "zebra"),
+    assertEquals("nodes keep the order the folders were configured in",
+                 List.of("zebra", "alpha", "middle"),
                  nodes.stream().map(GrailsCustomFoldersNodeProviderTest::label).toList());
+    assertEquals("each node carries its place in that order",
+                 List.of(0, 1, 2), nodes.stream().map(GrailsCustomFolder::getPosition).toList());
   }
 
   /**
-   * Pinning that the sort key is the last path segment and not the configured path. Here the two
-   * disagree — {@code b/docs} sorts before {@code a/zzz} by folder name and after it by path — so a
-   * provider that sorted by anything else would silently reorder the pane while the labels still
-   * looked right.
+   * Every custom folder has the same weight, so the pane's comparator is what keeps them in the
+   * configured order: it breaks the tie by position, for existing folders and placeholders alike,
+   * however the tree hands it the nodes.
    */
-  public void testNodesAreSortedByFolderNameNotByConfiguredPath() {
-    myFixture.addFileToProject("b/docs/readme.md", "# readme");
-    myFixture.addFileToProject("a/zzz/readme.md", "# readme");
+  public void testComparatorOrdersCustomFoldersByPosition() {
+    myFixture.addFileToProject("zebra/z.txt", "");
+    myFixture.addFileToProject("alpha/a.txt", "");
 
     GrailsCustomFoldersProjectService service = getProject().getService(GrailsCustomFoldersProjectService.class);
-    service.setFolders(List.of("a/zzz", "b/docs"));
+    service.setFolders(List.of("zebra", "missing", "alpha"));
 
-    List<GrailsCustomFolder> nodes = customFolderNodes(
+    List<AbstractTreeNode<?>> nodes = new ArrayList<>(
+      new GrailsCustomFoldersNodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT));
+    Collections.reverse(nodes);
+    nodes.sort(new GrailsNodeComparator(getProject(), GrailsConstants.GRAILS));
+
+    assertEquals(List.of("zebra", "missing", "alpha"),
+                 customFolderNodes(nodes).stream().map(GrailsCustomFolder::getConfiguredPath).toList());
+  }
+
+  /**
+   * A folder outside the project is listed by the node itself: the platform lists nothing under a
+   * directory the project does not cover. Files the IDE ignores everywhere stay hidden.
+   */
+  public void testAbsolutePathOutsideTheProjectListsItsContents() {
+    VirtualFile outside = OutsideProjectDirectory.create(getTestRootDisposable(), "provider-contents",
+                                                         "notes.md", "drafts/idea.md", ".DS_Store");
+
+    getProject().getService(GrailsCustomFoldersProjectService.class).setFolders(List.of(outside.getPath()));
+
+    GrailsCustomFolderNode node = existingFolderNode(
+      new GrailsCustomFoldersNodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT));
+    assertEquals("the node is the folder outside the project", outside, node.getVirtualFile());
+    assertEquals("labelled with its folder name", outside.getName(), label(node));
+
+    Collection<? extends AbstractTreeNode<?>> children = node.getChildren();
+    assertEquals("the folder's own subdirectory and file, without what the IDE ignores",
+                 List.of("drafts", "notes.md"), names(children));
+
+    AbstractTreeNode<?> drafts = children.iterator().next();
+    assertTrue("a subdirectory lists its own contents too", drafts instanceof GrailsExternalDirectoryNode);
+    assertEquals(List.of("idea.md"), names(drafts.getChildren()));
+  }
+
+  /** *Select Opened File* walks into a folder outside the project like any other. */
+  public void testVisitorRevealsFileInsideAFolderOutsideTheProject() {
+    VirtualFile outside = OutsideProjectDirectory.create(getTestRootDisposable(), "provider-reveal", "drafts/idea.md");
+    VirtualFile file = outside.findFileByRelativePath("drafts/idea.md");
+    assertNotNull(file);
+
+    getProject().getService(GrailsCustomFoldersProjectService.class).setFolders(List.of(outside.getPath()));
+
+    GrailsCustomFolderNode node = existingFolderNode(
       new GrailsCustomFoldersNodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT));
 
-    assertEquals("the folder name is the sort key, not the configured path",
-                 List.of("docs", "zzz"),
-                 nodes.stream().map(GrailsCustomFoldersNodeProviderTest::label).toList());
+    assertEquals(TreeVisitor.Action.CONTINUE, reveal(node, file));
+    AbstractTreeNode<?> drafts = node.getChildren().iterator().next();
+    assertEquals("and on down through the folders below it", TreeVisitor.Action.CONTINUE, reveal(drafts, file));
+  }
+
+  /**
+   * A sibling of the application in a multi-project build is reached with {@code ..}; it is inside
+   * the project, so the platform lists it as it lists any project directory.
+   */
+  public void testRelativePathClimbingOutOfTheApplicationResolves() {
+    myFixture.addFileToProject("app/grails-app/i18n/messages.properties", "greeting=hello");
+    myFixture.addFileToProject("shared/docs/readme.md", "# readme");
+    VirtualFile appRoot = myFixture.getTempDirFixture().getFile("app");
+    assertNotNull(appRoot);
+
+    getProject().getService(GrailsCustomFoldersProjectService.class).setFolders(List.of("../shared/docs"));
+
+    GrailsCustomFolderNode node = existingFolderNode(new GrailsCustomFoldersNodeProvider().createNodes(
+      new TestGrailsApplication(appRoot, getProject(), true), ViewSettings.DEFAULT));
+
+    assertEquals("docs", label(node));
+    assertEquals(List.of("readme.md"), names(node.getChildren()));
   }
 
   public void testNonExistentFolderIsPlaceholder() {
@@ -413,6 +480,15 @@ public class GrailsCustomFoldersNodeProviderTest extends GrailsNodeProviderTestS
     catch (Exception e) {
       throw new IllegalStateException("the platform visitor could not be run off the EDT", e);
     }
+  }
+
+  private static @NotNull List<String> names(@NotNull Collection<? extends AbstractTreeNode<?>> nodes) {
+    List<String> names = new ArrayList<>();
+    for (AbstractTreeNode<?> node : nodes) {
+      Object value = node.getValue();
+      names.add(value instanceof PsiFileSystemItem item ? item.getName() : String.valueOf(value));
+    }
+    return names;
   }
 
   private static @NotNull List<GrailsCustomFolder> customFolderNodes(

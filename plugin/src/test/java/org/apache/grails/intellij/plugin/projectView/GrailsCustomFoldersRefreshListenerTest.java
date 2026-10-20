@@ -204,6 +204,22 @@ public class GrailsCustomFoldersRefreshListenerTest extends GrailsTestCase {
   }
 
   /**
+   * An absolute path is matched as it stands, and one climbing out of the application root with
+   * {@code ..} as the canonical path it names, because that is the form VFS events carry.
+   */
+  public void testAbsoluteAndClimbingPathsAreMatchedCanonically() {
+    projectFolders("/home/me/notes/", "../shared/docs");
+    String root = applicationRootPath();
+    String parent = root.substring(0, root.lastIndexOf('/'));
+
+    assertTrue("an absolute path is not read against the application root",
+               GrailsCustomFoldersRefreshListener.isConfiguredFolder(getProject(), "/home/me/notes"));
+    assertFalse(GrailsCustomFoldersRefreshListener.isConfiguredFolder(getProject(), root + "/home/me/notes"));
+    assertTrue("a climbing path is matched as the folder it names",
+               GrailsCustomFoldersRefreshListener.isConfiguredFolder(getProject(), parent + "/shared/docs"));
+  }
+
+  /**
    * What the listener matches on, with no VFS in the way: a configured path is resolved against the
    * Grails application root, so the string that counts is the root path plus the normalized
    * configured path — not the configured path on its own, which is what made the project-relative

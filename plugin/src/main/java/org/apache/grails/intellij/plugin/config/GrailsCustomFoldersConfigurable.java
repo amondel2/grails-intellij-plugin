@@ -22,11 +22,11 @@ package org.apache.grails.intellij.plugin.config;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.fileChooser.FileChooser;
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.project.ProjectUtil;
-import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
@@ -43,6 +43,7 @@ import javax.swing.JPanel;
 import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.event.ChangeEvent;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -58,8 +59,8 @@ public class GrailsCustomFoldersConfigurable implements Configurable {
   private final @NotNull Project project;
 
   private @Nullable JPanel component;
-  private @Nullable GrailsCustomFoldersRows globalRows;
-  private @Nullable GrailsCustomFoldersRows projectRows;
+  private @Nullable GrailsCustomFoldersList globalRows;
+  private @Nullable GrailsCustomFoldersList projectRows;
   private @Nullable JSpinner maxFoldersSpinner;
   private @Nullable JBTextArea effectiveArea;
   private @Nullable JBLabel sourceLabel;
@@ -80,10 +81,12 @@ public class GrailsCustomFoldersConfigurable implements Configurable {
   @Override
   public @NotNull JComponent createComponent() {
     if (component == null) {
-      globalRows = new GrailsCustomFoldersRows();
-      projectRows = new GrailsCustomFoldersRows();
+      GrailsCustomFoldersList.FolderChooser chooser = (parent, toSelect) ->
+        FileChooser.chooseFile(FileChooserDescriptorFactory.singleDir(), parent, project, toSelect);
+      globalRows = new GrailsCustomFoldersList(this::applicationRoot, chooser);
+      projectRows = new GrailsCustomFoldersList(this::applicationRoot, chooser);
 
-      // The two row lists and the cap feed the same preview, so each registers the one repaint.
+      // The two lists and the cap feed the same preview, so each registers the one repaint.
       globalRows.addRowsChangedListener(this::updateEffectivePreview);
       projectRows.addRowsChangedListener(this::updateEffectivePreview);
 
@@ -109,15 +112,15 @@ public class GrailsCustomFoldersConfigurable implements Configurable {
       component = FormBuilder.createFormBuilder()
         .addComponent(description)
         .addComponent(warningLabel)
+        .addLabeledComponent(new JBLabel(key("grails.settings.custom.folders.project.folders")),
+                             projectRows.getComponent(), 1, true)
         .addLabeledComponent(new JBLabel(key("grails.settings.custom.folders.global.defaults")),
-                             globalRows.getComponent(), 1, false)
+                             globalRows.getComponent(), 1, true)
         .addLabeledComponent(new JBLabel(key("grails.settings.custom.folders.maximum.folders")),
                              maxFoldersSpinner, 1, false)
-        .addLabeledComponent(new JBLabel(key("grails.settings.custom.folders.project.folders")),
-                             projectRows.getComponent(), 1, false)
         .addComponent(sourceLabel)
         .addLabeledComponent(new JBLabel(key("grails.settings.custom.folders.effective.folders")),
-                             new JBScrollPane(preview), 1, false)
+                             new JBScrollPane(preview), 1, true)
         .getPanel();
 
       reset();
@@ -140,22 +143,17 @@ public class GrailsCustomFoldersConfigurable implements Configurable {
   public void apply() throws ConfigurationException {
     if (globalRows == null || projectRows == null || maxFoldersSpinner == null) return;
 
-    List<String> global = globalRows.getRows();
-    List<String> project = projectRows.getRows();
-
-    // Validated over the rows as typed, blanks included, so a message naming "row 3" names the field
-    // the user sees beside the number 3: the trimmed reader would silently renumber a list that
-    // holds an unused row.
+    // Validated over the rows as they stand, blanks included, so a message naming "row 3" names the
+    // row the user sees beside the number 3.
     //
-    // The global defaults are validated on shape alone (absolute path, escaping ".."), never against
-    // an application root: they are shared by every open project, each with its own root, so a path
-    // that resolves in one project need not resolve in another and is not invalid here. The
-    // application-root check is what this project's own list gets, because its base is knowable.
+    // A relative global default is not checked against this project's application root: the defaults
+    // are shared by every project, each with its own root, so a path that names a file here need not
+    // in another project. An absolute one names the same thing everywhere, so it is checked.
     validateRows(globalRows.rawRows(), key("grails.settings.custom.folders.area.global"), null);
     validateRows(projectRows.rawRows(), key("grails.settings.custom.folders.area.project"), applicationRoot());
 
-    appService.setGlobalDefaults(global, (Integer)maxFoldersSpinner.getValue());
-    projectService.setFolders(project);
+    appService.setGlobalDefaults(globalRows.getRows(), (Integer)maxFoldersSpinner.getValue());
+    projectService.setFolders(projectRows.getRows());
     updateEffectivePreview();
   }
 
@@ -222,83 +220,25 @@ public class GrailsCustomFoldersConfigurable implements Configurable {
   }
 
   /**
-   * Why the given path cannot be configured, or {@code null} when it can.
-   * <p>
-   * A null {@code appRoot} means shape-only validation: the first two checks decide and the
-   * application-root check is skipped rather than run against the wrong base. That is the global
-   * defaults' case, whose base is per project and so not knowable here — see {@link #apply()}.
-   * <p>
-   * The application-root check answers "does this resolve outside the root", and it deliberately
-   * draws that line at resolution: a path that resolves to nothing yet is accepted, because a
-   * folder created by a later build is a legitimate thing to configure. It follows that a path
-   * resolving to a regular file is accepted too — the provider needs a directory, so it renders a
-   * placeholder, but rejecting it here would refuse a path the check has no way to distinguish from
-   * the not-created-yet case.
+   * Why the given path cannot be configured, or {@code null} when it can. The only path refused is
+   * one that names a file: anything else is a folder, or one that does not exist yet and renders as a
+   * placeholder until a build or the user creates it. A relative path is checked only when the
+   * application root is known.
    */
   static @Nullable String invalidPathReason(@NotNull String path, @Nullable VirtualFile appRoot) {
-    // Normalized once, up front: the row arrives exactly as typed, so without this the absolute-path
-    // test reads a leading space where the other two read the trimmed path, and "  /etc" or
-    // "\tC:\grails-app" is accepted.
-    String normalized = FolderPaths.normalize(path);
-    if (isAbsolutePath(normalized)) {
-      return key("grails.settings.custom.folders.absolute.path");
-    }
-    if (escapesApplicationRoot(normalized)) {
-      return key("grails.settings.custom.folders.escapes.application.root");
-    }
-    if (appRoot != null && !resolvesInsideApplicationRoot(appRoot, normalized)) {
-      return key("grails.settings.custom.folders.outside.application.root");
-    }
-    return null;
+    return GrailsCustomFoldersList.statusOf(appRoot, path) == GrailsCustomFoldersList.Status.NOT_A_FOLDER
+           ? key("grails.settings.custom.folders.not.a.folder")
+           : null;
   }
 
   /**
-   * Takes a {@link FolderPaths#normalize normalized} path. That is why the backslash branch below is
-   * dead — normalize has already turned every one into a forward slash, which is also why a Windows
-   * drive path is caught by the {@code ':'} test rather than needing a separator of its own.
+   * The root this project's relative paths are read against: the project's Grails application, or
+   * null when it has none or several, since a relative path then has no single meaning to check.
    */
-  private static boolean isAbsolutePath(@NotNull String path) {
-    if (path.isEmpty()) return false;
-    char first = path.charAt(0);
-    if (first == '/' || first == '\\') return true;
-    return path.length() > 1 && path.charAt(1) == ':' && isAsciiLetter(first);
-  }
-
-  private static boolean isAsciiLetter(char c) {
-    return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z');
-  }
-
-  private static boolean escapesApplicationRoot(@NotNull String normalizedPath) {
-    int depth = 0;
-    for (String segment : normalizedPath.split("/")) {
-      if (segment.isEmpty() || segment.equals(".")) continue;
-      if (segment.equals("..")) {
-        depth--;
-        if (depth < 0) return true;
-      }
-      else {
-        depth++;
-      }
-    }
-    return false;
-  }
-
-  private static boolean resolvesInsideApplicationRoot(@NotNull VirtualFile appRoot, @NotNull String path) {
-    // Under a read action, exactly like applicationRoot() wraps the model lookup above: the VFS is
-    // read here, and the platform has no EDT carve-out for that.
-    return ReadAction.computeBlocking(() -> {
-      VirtualFile resolved = appRoot.findFileByRelativePath(path);
-      // A path that does not resolve yet is left alone: it becomes a placeholder in the Grails view.
-      return resolved == null || VfsUtilCore.isAncestor(appRoot, resolved, false);
-    });
-  }
-
   private @Nullable VirtualFile applicationRoot() {
     return ReadAction.computeBlocking(() -> {
-      GrailsApplicationManager manager = GrailsApplicationManager.getInstance(project);
-      if (!manager.hasApplications()) return null;
-      GrailsApplication application = manager.findApplication(ProjectUtil.guessProjectDir(project));
-      return application == null ? null : application.getRoot();
+      Collection<GrailsApplication> applications = GrailsApplicationManager.getInstance(project).getApplications();
+      return applications.size() == 1 ? applications.iterator().next().getRoot() : null;
     });
   }
 

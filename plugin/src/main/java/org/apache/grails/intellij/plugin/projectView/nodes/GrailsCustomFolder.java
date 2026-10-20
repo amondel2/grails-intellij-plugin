@@ -23,13 +23,16 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * A node standing for a folder configured for a Grails application, whether it resolves on disk or
- * is a placeholder for one that does not. It exposes the configured path and the weight that places
- * the node among its siblings, so the comparator and the custom-folder actions need only a single
- * {@code instanceof}.
+ * is a placeholder for one that does not. It exposes the configured path, the weight that places
+ * the node among its siblings and its position in the configured list, so the comparator and the
+ * custom-folder actions need only a single {@code instanceof}.
  */
 public interface GrailsCustomFolder {
 
   @NotNull String getConfiguredPath();
 
   int getNodeWeight();
+
+  /** The folder's index in the effective list; the comparator orders custom folders by it. */
+  int getPosition();
 }

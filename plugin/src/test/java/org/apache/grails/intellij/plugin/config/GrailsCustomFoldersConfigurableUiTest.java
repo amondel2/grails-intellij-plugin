@@ -43,9 +43,9 @@ import java.util.function.Supplier;
 
 /**
  * The settings page as the platform drives it: built once, reset from the services, edited through
- * its rows and spinner, applied back to them, and disposed. The rows and the preview are reached
- * through the built component because they are private fields, and the page is only ever used
- * through the {@code Configurable} API.
+ * its folder lists and spinner, applied back to them, and disposed. The lists and the preview are
+ * reached through the built component because they are private fields, and the page is only ever
+ * used through the {@code Configurable} API.
  */
 public class GrailsCustomFoldersConfigurableUiTest extends GrailsTestCase {
 
@@ -195,29 +195,32 @@ public class GrailsCustomFoldersConfigurableUiTest extends GrailsTestCase {
   }
 
   /**
-   * FR17: a path the Grails view could not use is refused, naming its area and row.
+   * FR17: a path the Grails view could not use — one that names a file — is refused, naming its area
+   * and row, and nothing is written.
    */
-  public void testApplyRejectsAnAbsolutePathNamingTheAreaAndTheRow() throws ConfigurationException {
+  public void testApplyRejectsAPathNamingAFileNamingTheAreaAndTheRow() throws ConfigurationException {
     withGlobalDefaults(() -> {
       appService().setFolders(List.of("global/stored"));
       projectService().setFolders(Collections.<String>emptyList());
+      myFixture.addFileToProject("README.md", "# readme");
       GrailsCustomFoldersConfigurable configurable = page();
       configurable.createComponent();
       configurable.reset();
 
       projectRows(configurable).addRow("docs");
-      projectRows(configurable).addRow("/etc/passwd");
+      projectRows(configurable).addRow("README.md");
 
       try {
         configurable.apply();
-        fail("an absolute path cannot be resolved against the Grails application root");
+        fail("a file cannot be shown as a folder");
       }
       catch (ConfigurationException e) {
         String message = String.valueOf(e.getMessage());
         assertTrue("the message names the area: " + message,
                    message.contains("This project's folders"));
         assertTrue("the message names the row: " + message, message.contains("row 2"));
-        assertTrue("the message quotes the path: " + message, message.contains("/etc/passwd"));
+        assertTrue("the message quotes the path: " + message, message.contains("README.md"));
+        assertTrue("the message says what is wrong: " + message, message.contains("is a file, not a folder"));
 
         assertEquals("nothing of the global defaults is written either",
                      List.of("global/stored"), appService().getFolders());
@@ -229,32 +232,57 @@ public class GrailsCustomFoldersConfigurableUiTest extends GrailsTestCase {
 
   /**
    * FR17: the row the message names has to be the one the user sees. A list holding an unused blank
-   * row is numbered over the rows as displayed, so an invalid path in the second field is "row 2"
-   * even though it is the first row that holds a path — otherwise the message points at the wrong
-   * field and Apply reports the same wrong number again.
+   * row is numbered over the rows as displayed, so an invalid path in the third row is "row 3"
+   * even though it is the second row that holds a path — otherwise the message points at the wrong
+   * row and Apply reports the same wrong number again.
    */
   public void testApplyNumbersTheRowTheUserSees() throws ConfigurationException {
     withGlobalDefaults(() -> {
       appService().setFolders(Collections.<String>emptyList());
+      myFixture.addFileToProject("README.md", "# readme");
       GrailsCustomFoldersConfigurable configurable = page();
       configurable.createComponent();
       configurable.reset();
 
       projectRows(configurable).addRow("");
       projectRows(configurable).addRow("docs");
-      projectRows(configurable).addRow("../outside");
+      projectRows(configurable).addRow("README.md");
 
       try {
         configurable.apply();
-        fail("a path that escapes the application root is refused");
+        fail("a path that names a file is refused");
       }
       catch (ConfigurationException e) {
         String message = String.valueOf(e.getMessage());
-        assertTrue("the message names the row beside the offending field: " + message,
+        assertTrue("the message names the row beside the offending path: " + message,
                    message.contains("row 3"));
-        assertEquals("the rows behind the offending one are still fine",
+        assertEquals("the rows before the offending one are not written either",
                      Collections.<String>emptyList(), projectService().getFolders());
       }
+    });
+  }
+
+  /**
+   * Paths outside the application root are what the custom folders are for: an absolute path, one
+   * starting with {@code ~} and one climbing out with {@code ..} are all stored as typed.
+   */
+  public void testApplyAcceptsPathsOutsideTheApplicationRoot() throws ConfigurationException {
+    withGlobalDefaults(() -> {
+      appService().setFolders(Collections.<String>emptyList());
+      projectService().setFolders(Collections.<String>emptyList());
+      String outside = OutsideProjectDirectory.create(getTestRootDisposable(), "ui-outside").getPath();
+      GrailsCustomFoldersConfigurable configurable = page();
+      configurable.createComponent();
+      configurable.reset();
+
+      projectRows(configurable).addRow(outside);
+      projectRows(configurable).addRow("../shared/docs");
+      globalRows(configurable).addRow("~/notes");
+
+      configurable.apply();
+
+      assertEquals(List.of(outside, "../shared/docs"), projectService().getFolders());
+      assertEquals(List.of("~/notes"), appService().getFolders());
     });
   }
 
@@ -279,25 +307,49 @@ public class GrailsCustomFoldersConfigurableUiTest extends GrailsTestCase {
     });
   }
 
-  /** FR17: the global defaults are validated on shape alone, because they belong to every project. */
-  public void testApplyRejectsAnEscapingGlobalPath() throws ConfigurationException {
+  /**
+   * FR17: an absolute global default names the same thing in every project, so one that names a file
+   * is refused like a project folder.
+   */
+  public void testApplyRejectsAnAbsoluteGlobalPathNamingAFile() throws ConfigurationException {
     withGlobalDefaults(() -> {
       appService().setFolders(Collections.<String>emptyList());
+      String file = OutsideProjectDirectory.create(getTestRootDisposable(), "ui-global-file", "notes.md")
+                      .getPath() + "/notes.md";
       GrailsCustomFoldersConfigurable configurable = page();
       configurable.createComponent();
       configurable.reset();
 
-      globalRows(configurable).addRow("../outside");
+      globalRows(configurable).addRow(file);
 
       try {
         configurable.apply();
-        fail("a path that escapes the application root is refused for the global defaults too");
+        fail("a file is refused for the global defaults too");
       }
       catch (ConfigurationException e) {
         String message = String.valueOf(e.getMessage());
         assertTrue("the message names the area: " + message, message.contains("Global defaults"));
         assertTrue("the message names the row: " + message, message.contains("row 1"));
       }
+    });
+  }
+
+  /**
+   * A relative global default is read against each project's own root, so naming a file in this
+   * project says nothing about the others: it is not refused here.
+   */
+  public void testApplyAcceptsARelativeGlobalPathThatNamesAFileInThisProject() throws ConfigurationException {
+    withGlobalDefaults(() -> {
+      appService().setFolders(Collections.<String>emptyList());
+      myFixture.addFileToProject("README.md", "# readme");
+      GrailsCustomFoldersConfigurable configurable = page();
+      configurable.createComponent();
+      configurable.reset();
+
+      globalRows(configurable).addRow("README.md");
+      configurable.apply();
+
+      assertEquals(List.of("README.md"), appService().getFolders());
     });
   }
 
@@ -363,7 +415,7 @@ public class GrailsCustomFoldersConfigurableUiTest extends GrailsTestCase {
     });
   }
 
-  /** FR23: the live preview is wired to the rows' document events, not re-read on save only. */
+  /** FR23: the live preview is wired to the lists' change events, not re-read on save only. */
   public void testRowsDriveThePreviewWhileTheyAreEdited() throws ConfigurationException {
     withGlobalDefaults(() -> {
       appService().setFolders(Collections.<String>emptyList());
@@ -375,7 +427,7 @@ public class GrailsCustomFoldersConfigurableUiTest extends GrailsTestCase {
       assertEquals("nothing is configured yet", "", previewText(configurable));
 
       globalRows(configurable).addRow("docs");
-      assertEquals("an appended row reaches the preview through the document listener",
+      assertEquals("an appended row reaches the preview through the list's change listener",
                    "docs", previewText(configurable));
 
       projectRows(configurable).addRow("");
@@ -385,6 +437,24 @@ public class GrailsCustomFoldersConfigurableUiTest extends GrailsTestCase {
 
       projectRows(configurable).setRows(List.of("first", "second"));
       assertEquals("first\nsecond\ndocs", previewText(configurable));
+    });
+  }
+
+  /** The order of the rows is the rendered order, so moving a row moves it in the preview at once. */
+  public void testMovingARowReordersThePreview() throws ConfigurationException {
+    withGlobalDefaults(() -> {
+      appService().setFolders(List.of("global/a"));
+      projectService().setFolders(List.of("project/b", "project/c"));
+      GrailsCustomFoldersConfigurable configurable = page();
+      configurable.createComponent();
+      configurable.reset();
+      assertEquals("project/b\nproject/c\nglobal/a", previewText(configurable));
+
+      projectRows(configurable).moveDown(0);
+
+      assertEquals("project/c\nproject/b\nglobal/a", previewText(configurable));
+      configurable.apply();
+      assertEquals("the new order is what is stored", List.of("project/c", "project/b"), projectService().getFolders());
     });
   }
 
@@ -418,14 +488,14 @@ public class GrailsCustomFoldersConfigurableUiTest extends GrailsTestCase {
     return getProject().getService(GrailsCustomFoldersProjectService.class);
   }
 
-  /** The global-defaults row list, which the form puts before the cap spinner. */
-  private static @NotNull GrailsCustomFoldersRows globalRows(@NotNull GrailsCustomFoldersConfigurable page) {
-    return rowPanels(page).get(0);
+  /** The global-defaults list, which the form puts after this project's, the order they render in. */
+  private static @NotNull GrailsCustomFoldersList globalRows(@NotNull GrailsCustomFoldersConfigurable page) {
+    return rowPanels(page).get(1);
   }
 
-  /** This project's row list, which the form puts after the cap spinner. */
-  private static @NotNull GrailsCustomFoldersRows projectRows(@NotNull GrailsCustomFoldersConfigurable page) {
-    return rowPanels(page).get(1);
+  /** This project's list, which the form puts first. */
+  private static @NotNull GrailsCustomFoldersList projectRows(@NotNull GrailsCustomFoldersConfigurable page) {
+    return rowPanels(page).get(0);
   }
 
   private static @NotNull JSpinner spinner(@NotNull GrailsCustomFoldersConfigurable page) {
@@ -445,7 +515,7 @@ public class GrailsCustomFoldersConfigurableUiTest extends GrailsTestCase {
   }
 
   private static @NotNull String descriptionText(@NotNull GrailsCustomFoldersConfigurable page) {
-    return labelContaining(page, "A path is resolved");
+    return labelContaining(page, "A relative path is resolved");
   }
 
   private static @NotNull String labelContaining(@NotNull GrailsCustomFoldersConfigurable page,
@@ -484,10 +554,9 @@ public class GrailsCustomFoldersConfigurableUiTest extends GrailsTestCase {
     return null;
   }
 
-  private static @NotNull List<GrailsCustomFoldersRows> rowPanels(@NotNull GrailsCustomFoldersConfigurable page) {
-    List<GrailsCustomFoldersRows> rows = allOfType(page.createComponent(), GrailsCustomFoldersRows.class);
-    assertTrue("the page holds one row list for the global defaults and one for this project",
-               rows.size() >= 2);
+  private static @NotNull List<GrailsCustomFoldersList> rowPanels(@NotNull GrailsCustomFoldersConfigurable page) {
+    List<GrailsCustomFoldersList> rows = allOfType(page.createComponent(), GrailsCustomFoldersList.class);
+    assertEquals("the page holds one list for this project and one for the global defaults", 2, rows.size());
     return rows;
   }
 

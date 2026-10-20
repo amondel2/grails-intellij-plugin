@@ -30,7 +30,7 @@ import java.util.Collections;
 /**
  * The page's pure helpers take lists of paths, so they are driven here with no settings dialog in
  * the way: the preview merge, the over-cap warning, the description and the path validation
- * {@code apply()} performs.
+ * {@code apply()} performs, which refuses only a path that names a file.
  */
 public class GrailsCustomFoldersConfigurableTest extends GrailsTestCase {
 
@@ -201,9 +201,13 @@ public class GrailsCustomFoldersConfigurableTest extends GrailsTestCase {
     assertTrue(GrailsCustomFoldersConfigurable.description(6).contains("resolved against the Grails application root"));
   }
 
-  public void testDescriptionDropsTheAbsolutePathClaim() {
-    assertFalse(GrailsCustomFoldersConfigurable.description(6).contains("absolute paths are used as-is"));
-    assertTrue(GrailsCustomFoldersConfigurable.description(6).contains("stay inside it"));
+  public void testDescriptionStatesThatAnAbsolutePathCanNameAnyFolder() {
+    assertTrue(GrailsCustomFoldersConfigurable.description(6).contains("an absolute path"));
+    assertTrue(GrailsCustomFoldersConfigurable.description(6).contains("any folder on disk"));
+  }
+
+  public void testDescriptionStatesTheOrder() {
+    assertTrue(GrailsCustomFoldersConfigurable.description(6).contains("in the order listed"));
   }
 
   public void testDescriptionInterpolatesTheCap() {
@@ -211,56 +215,62 @@ public class GrailsCustomFoldersConfigurableTest extends GrailsTestCase {
     assertFalse(GrailsCustomFoldersConfigurable.description(20).contains("at most 3"));
   }
 
-  public void testAbsolutePathIsRejected() {
-    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason("/etc", null));
-  }
-
-  public void testWindowsDrivePathIsRejected() {
-    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason("C:\\grails-app", null));
-  }
-
-  public void testUncPathIsRejected() {
-    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason("\\\\server\\share", null));
-  }
-
-  /**
-   * Rows are validated as typed, so a stray leading space must not buy a path the trimmed form would
-   * be refused: {@code normalize} trims, and the absolute-path test has to read what the other two
-   * checks read. A Windows path needs the same treatment — it has no {@code ..} to be caught by the
-   * escaping test, and {@code findFileByRelativePath} skips the empty first token of {@code C:/...},
-   * so it resolves to nothing and would sit in the list as a permanent placeholder.
-   */
-  public void testAbsolutePathIsRejectedWhateverSurroundingWhitespaceItCarries() {
-    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason("  /etc", null));
-    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason("\t/etc", null));
-    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason("/etc  ", null));
-    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason(" C:\\grails-app", null));
-    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason(" \\\\server\\share ", null));
-  }
-
-  /** The same rows are refused when the application root is known, not only on shape alone. */
-  public void testWhitespacePaddedAbsolutePathIsRejectedAgainstTheApplicationRoot() throws IOException {
+  /** A folder outside the application, or the project, is a legitimate custom folder. */
+  public void testAbsolutePathToAFolderIsAccepted() throws IOException {
     VirtualFile root = myFixture.getTempDirFixture().findOrCreateDir("app");
-    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason("  /etc", root));
-    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason(" C:\\grails-app", root));
+    VirtualFile outside = OutsideProjectDirectory.create(getTestRootDisposable(), "configurable-folder");
+
+    assertNull(GrailsCustomFoldersConfigurable.invalidPathReason(outside.getPath(), root));
+    assertNull(GrailsCustomFoldersConfigurable.invalidPathReason(outside.getPath(), null));
   }
 
-  /** A padded path that is genuinely relative is still accepted, so the trimming is not over-eager. */
+  /** Nothing there yet is a placeholder, not an error, whatever the spelling. */
+  public void testAbsolutePathsThatResolveToNothingAreAccepted() {
+    assertNull(GrailsCustomFoldersConfigurable.invalidPathReason("/no-such-home/notes", null));
+    assertNull(GrailsCustomFoldersConfigurable.invalidPathReason("C:\\grails-app", null));
+    assertNull(GrailsCustomFoldersConfigurable.invalidPathReason("\\\\server\\share", null));
+  }
+
+  public void testPathClimbingOutOfTheApplicationRootIsAccepted() throws IOException {
+    VirtualFile root = myFixture.getTempDirFixture().findOrCreateDir("app");
+    myFixture.getTempDirFixture().findOrCreateDir("shared");
+
+    assertNull(GrailsCustomFoldersConfigurable.invalidPathReason("../shared", root));
+    assertNull(GrailsCustomFoldersConfigurable.invalidPathReason("docs/../../outside", null));
+  }
+
+  public void testRelativePathNamingAFileIsRejected() throws IOException {
+    VirtualFile root = myFixture.getTempDirFixture().findOrCreateDir("app");
+    myFixture.addFileToProject("app/README.md", "# readme");
+
+    assertEquals("is a file, not a folder", GrailsCustomFoldersConfigurable.invalidPathReason("README.md", root));
+  }
+
+  /** A relative path has no single meaning without the application root, so it is not checked then. */
+  public void testRelativePathIsNotCheckedWithoutAnApplicationRoot() {
+    myFixture.addFileToProject("app/README.md", "# readme");
+
+    assertNull(GrailsCustomFoldersConfigurable.invalidPathReason("README.md", null));
+  }
+
+  /** An absolute path names the same thing in every project, so it is checked even with no root. */
+  public void testAbsolutePathNamingAFileIsRejectedWithOrWithoutAnApplicationRoot() throws IOException {
+    VirtualFile root = myFixture.getTempDirFixture().findOrCreateDir("app");
+    VirtualFile outside = OutsideProjectDirectory.create(getTestRootDisposable(), "configurable-file", "notes.md");
+    String file = outside.getPath() + "/notes.md";
+
+    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason(file, root));
+    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason(file, null));
+    assertNotNull("surrounding whitespace does not hide it",
+                  GrailsCustomFoldersConfigurable.invalidPathReason("  " + file + "\t", null));
+  }
+
+  /** A padded path that names a folder is still accepted, so the trimming is not over-eager. */
   public void testWhitespaceAroundARelativePathIsNotAReservation() throws IOException {
     VirtualFile root = myFixture.getTempDirFixture().findOrCreateDir("app");
     myFixture.getTempDirFixture().findOrCreateDir("app/docs");
     assertNull(GrailsCustomFoldersConfigurable.invalidPathReason("  docs  ", root));
     assertNull(GrailsCustomFoldersConfigurable.invalidPathReason("  docs  ", null));
-  }
-
-  public void testPathEscapingTheApplicationRootIsRejected() {
-    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason("../outside", null));
-    assertNotNull(GrailsCustomFoldersConfigurable.invalidPathReason("docs/../../outside", null));
-  }
-
-  public void testPathThatReturnsIntoTheApplicationRootIsAccepted() {
-    assertNull(GrailsCustomFoldersConfigurable.invalidPathReason("docs/../readme", null));
-    assertNull(GrailsCustomFoldersConfigurable.invalidPathReason("grails-app\\i18n", null));
   }
 
   public void testPathInsideTheApplicationRootIsAccepted() throws IOException {
@@ -273,10 +283,5 @@ public class GrailsCustomFoldersConfigurableTest extends GrailsTestCase {
   public void testUnresolvedPathIsNotRejected() throws IOException {
     VirtualFile root = myFixture.getTempDirFixture().findOrCreateDir("app");
     assertNull(GrailsCustomFoldersConfigurable.invalidPathReason("docs/not-created-yet", root));
-  }
-
-  public void testInvalidPathReasonNamesTheOffendingPath() {
-    assertEquals("must be relative to the Grails application root, not an absolute path",
-                 GrailsCustomFoldersConfigurable.invalidPathReason("/etc", null));
   }
 }

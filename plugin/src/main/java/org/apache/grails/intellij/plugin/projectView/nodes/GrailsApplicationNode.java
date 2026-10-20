@@ -30,6 +30,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.SimpleTextAttributes;
 import org.jetbrains.annotations.NotNull;
 import org.apache.grails.intellij.plugin.GrailsBundle;
+import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService;
 import org.apache.grails.intellij.plugin.projectView.api.GrailsViewNodeProvider;
 import org.apache.grails.intellij.plugin.structure.GrailsApplication;
 import org.apache.grails.intellij.plugin.structure.GrailsApplicationManager;
@@ -74,7 +75,10 @@ public class GrailsApplicationNode extends ProjectViewNode<GrailsApplication> {
   @Override
   public boolean contains(@NotNull VirtualFile file) {
     Project project = getProject();
-    return project != null && GrailsApplicationManager.getInstance(project).findApplication(file) == getValue();
+    if (project == null) return false;
+    GrailsApplication application = getValue();
+    return GrailsApplicationManager.getInstance(project).findApplication(file) == application
+           || project.getService(GrailsCustomFoldersProjectService.class).isInCustomFolder(application.getRoot(), file);
   }
 
   @Override

@@ -36,6 +36,7 @@ import com.intellij.util.ThrowableRunnable;
 import org.apache.grails.intellij.lib.testFramework.GrailsTestCase;
 import org.apache.grails.intellij.plugin.config.GrailsConstants;
 import org.apache.grails.intellij.plugin.config.GrailsCustomFoldersProjectService;
+import org.apache.grails.intellij.plugin.config.OutsideProjectDirectory;
 import org.apache.grails.intellij.plugin.projectView.api.GrailsViewNodeProvider;
 import org.apache.grails.intellij.plugin.projectView.impl.GrailsCustomFoldersNodeProvider;
 import org.apache.grails.intellij.plugin.projectView.nodes.GrailsApplicationNode;
@@ -79,9 +80,9 @@ public class GrailsCustomFoldersPaneTest extends GrailsTestCase {
   }
 
   /**
-   * An absolute path is no longer special-cased: the provider reads it as a relative path and resolves
-   * it against the application root, so it names nothing that exists. It still gets its placeholder
-   * node, because a configured path that resolves to nothing must never disappear from the view.
+   * An absolute path is looked up on the local file system; one that names nothing still gets its
+   * placeholder node, because a configured path that resolves to nothing must never disappear from
+   * the view.
    */
   public void testTreeBuildsWithNonExistentAbsoluteFolder() {
     addGrailsApp();
@@ -92,7 +93,7 @@ public class GrailsCustomFoldersPaneTest extends GrailsTestCase {
 
     Collection<AbstractTreeNode<?>> applicationNodes = buildApplicationNodesFor(List.of("/no-such-home/aarone"));
     AbstractTreeNode<?> node = customFolderNode(applicationNodes, "/no-such-home/aarone");
-    assertTrue("the path is read as relative and resolved against the application root, which it misses",
+    assertTrue("nothing exists at that absolute path, so the folder is a placeholder",
                node instanceof GrailsMissingCustomFolderNode);
     assertEquals("a folder that does not exist has nothing to expand",
                  LeafState.ALWAYS, node.getLeafState());
@@ -197,14 +198,10 @@ public class GrailsCustomFoldersPaneTest extends GrailsTestCase {
   }
 
   /**
-   * FR48's {@code .github} fixture, observed through the node chain the pane builds rather than
-   * reasoned about: a hidden dot-directory inside the application renders as a real, expandable
-   * folder node — not as the placeholder, and not filtered away.
-   *
-   * <p>This is the rule the README and {@code IMPROVEMENT-PLAN.md} §2.8 state, and the one §2.8
-   * previously got wrong: the platform's default {@code Ignored Files and Folders} list matches named
-   * entries and glob suffixes, and carries no rule covering dot-directories. Both halves are asserted
-   * here, so neither the README nor §2.8 can drift back to an unverified generalisation.
+   * A hidden dot-directory inside the application, observed through the node chain the pane builds:
+   * it renders as a real, expandable folder node — not as the placeholder, and not filtered away. The
+   * platform's default {@code Ignored Files and Folders} list matches named entries and glob
+   * suffixes, and carries no rule covering dot-directories; both halves are asserted here.
    */
   public void testHiddenDotDirectoryRendersAsAnExpandableFolderNode() {
     myFixture.addFileToProject(".github/workflows/ci.yml", "jobs: {}");
@@ -229,25 +226,44 @@ public class GrailsCustomFoldersPaneTest extends GrailsTestCase {
   }
 
   /**
-   * FR48's absolute path, observed the same way: a directory that exists on disk but lies outside the
-   * Grails application is not resolved. The path is read relative to the application root, so it names
-   * nothing that exists and the pane renders the placeholder. That is the shape of the whole "no
-   * external directories" limitation, recorded here instead of being asserted twice in the docs.
+   * A directory outside the project, configured by absolute path, observed the same way: the pane
+   * renders it as a navigable folder node and lists what is in it.
    */
-  public void testAbsolutePathOutsideTheApplicationRendersAsPlaceholder() {
-    // An absolute directory that exists on this machine and sits outside the application: /tmp does,
-    // and no relative reading of it can land inside the application root.
-    String outside = new java.io.File(System.getProperty("java.io.tmpdir")).getAbsolutePath();
-    assertTrue("the recorded outside directory must be absolute: " + outside, outside.startsWith("/"));
+  public void testAbsolutePathOutsideTheProjectRendersItsContents() {
+    VirtualFile outside = OutsideProjectDirectory.create(getTestRootDisposable(), "pane-contents", "notes.md");
 
-    Collection<AbstractTreeNode<?>> applicationNodes = buildApplicationNodesFor(List.of(outside));
-    AbstractTreeNode<?> node = customFolderNode(applicationNodes, outside);
+    Collection<AbstractTreeNode<?>> applicationNodes = buildApplicationNodesFor(List.of(outside.getPath()));
+    AbstractTreeNode<?> node = customFolderNode(applicationNodes, outside.getPath());
 
-    assertTrue("an absolute path resolves to nothing and keeps its placeholder",
-                node instanceof GrailsMissingCustomFolderNode);
-    assertEquals("a folder that does not exist has nothing to expand",
-                  LeafState.ALWAYS, node.getLeafState());
-    assertTrue("a placeholder has no children", node.getChildren().isEmpty());
+    assertTrue("a folder that exists outside the project gets the navigable node",
+               node instanceof GrailsCustomFolderNode);
+    assertEquals(outside.getName(), renderedLabel(node));
+    assertEquals("its contents are listed", 1, node.getChildren().size());
+  }
+
+  /**
+   * *Select Opened File* and autoscroll reach a file only through nodes whose {@code contains}
+   * accepts it, and only when the pane's select-in target agrees to select it at all. A file in a
+   * custom folder outside the application, or the project, passes all three.
+   */
+  public void testFileInAFolderOutsideTheProjectIsSelectableThroughTheNodeChain() {
+    VirtualFile outside = OutsideProjectDirectory.create(getTestRootDisposable(), "pane-select", "notes.md");
+    VirtualFile file = outside.findChild("notes.md");
+    assertNotNull(file);
+    VirtualFile unrelated = OutsideProjectDirectory.create(getTestRootDisposable(), "pane-unrelated", "other.md")
+      .findChild("other.md");
+    assertNotNull(unrelated);
+
+    buildApplicationNodesFor(List.of(outside.getPath()));
+    GrailsRootNode root = new GrailsRootNode(getProject(), ViewSettings.DEFAULT);
+    GrailsApplicationNode application = new GrailsApplicationNode(singleApplication(), ViewSettings.DEFAULT);
+
+    assertTrue("the root node claims the file", root.contains(file));
+    assertTrue("the application node claims the file", application.contains(file));
+    assertTrue("the select-in target agrees to select it", GrailsProjectViewPane.isInCustomFolder(getProject(), file));
+
+    assertFalse("a file in no custom folder is not claimed", application.contains(unrelated));
+    assertFalse(GrailsProjectViewPane.isInCustomFolder(getProject(), unrelated));
   }
 
   /** The label the renderer shows, read through {@code update()} so decorators and postprocess run. */

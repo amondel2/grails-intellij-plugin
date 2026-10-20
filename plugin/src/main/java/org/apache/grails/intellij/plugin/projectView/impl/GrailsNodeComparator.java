@@ -67,7 +67,14 @@ public final class GrailsNodeComparator implements Comparator<NodeDescriptor<?>>
 
     int leftWeight = weight(left);
     int rightWeight = weight(right);
-    if (leftWeight >= 0 && rightWeight >= 0) return leftWeight - rightWeight;
+    if (leftWeight >= 0 && rightWeight >= 0) {
+      if (leftWeight != rightWeight) return leftWeight - rightWeight;
+      // custom folders share one weight and render in the order the user listed them
+      if (left instanceof GrailsCustomFolder leftFolder && right instanceof GrailsCustomFolder rightFolder) {
+        return Integer.compare(leftFolder.getPosition(), rightFolder.getPosition());
+      }
+      return 0;
+    }
 
     if (right instanceof PsiFileNode rightFile && !(left instanceof PsiFileNode)
         && rightFile.getParent() instanceof GrailsApplicationNode) {

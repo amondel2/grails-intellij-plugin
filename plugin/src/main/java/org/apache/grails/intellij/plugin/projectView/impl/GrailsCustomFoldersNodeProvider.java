@@ -36,32 +36,34 @@ import org.apache.grails.intellij.plugin.structure.GrailsApplication;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.List;
 
 public final class GrailsCustomFoldersNodeProvider implements GrailsViewNodeProvider {
 
+  /**
+   * One node per effective folder, in the order the user listed them: this project's folders first,
+   * then the global defaults. The position travels with the node so the comparator keeps that order
+   * among nodes that share {@code NodeWeights.CUSTOM_FOLDER}.
+   */
   @Override
   public @NotNull Collection<AbstractTreeNode<?>> createNodes(@NotNull GrailsApplication application,
                                                               @NotNull ViewSettings settings) {
     Project project = application.getProject();
     List<String> folders = project.getService(GrailsCustomFoldersProjectService.class).getEffectiveFolders();
 
-    List<String> sorted = new ArrayList<>(folders);
-    sorted.sort(Comparator.comparing(FolderPaths::folderName));
-
     Collection<AbstractTreeNode<?>> result = new ArrayList<>();
-    for (String configuredPath : sorted) {
+    for (int position = 0; position < folders.size(); position++) {
+      String configuredPath = folders.get(position);
       PsiDirectory dir = resolve(application, configuredPath);
       result.add(dir != null
-                 ? new GrailsCustomFolderNode(project, dir, settings, configuredPath)
-                 : new GrailsMissingCustomFolderNode(project, settings, configuredPath));
+                 ? new GrailsCustomFolderNode(project, dir, settings, configuredPath, position)
+                 : new GrailsMissingCustomFolderNode(project, settings, configuredPath, position));
     }
     return result;
   }
 
   private static @Nullable PsiDirectory resolve(@NotNull GrailsApplication application, @NotNull String path) {
-    VirtualFile file = application.getRoot().findFileByRelativePath(FolderPaths.normalize(path));
-    return file == null ? null : PsiManager.getInstance(application.getProject()).findDirectory(file);
+    VirtualFile file = FolderPaths.find(application.getRoot(), path);
+    return file == null || !file.isDirectory() ? null : PsiManager.getInstance(application.getProject()).findDirectory(file);
   }
 }

@@ -114,10 +114,10 @@ public final class GrailsCustomFoldersRefreshListener implements ProjectActivity
 
   /**
    * Whether the changed path is one the Grails view renders a custom folder for. The Grails pane
-   * reads a configured path against each Grails application root, so a path only counts when it is
-   * exactly one of those; a file written *inside* a custom folder has a longer path and so costs
-   * nothing here — a build writes hundreds of them under build/ and none of them match. Without that
-   * exactness every file a build touched would rebuild the pane.
+   * reads a relative path against each Grails application root and an absolute one as it stands, so
+   * a path only counts when it is exactly one of those; a file written *inside* a custom folder has a
+   * longer path and so costs nothing here — a build writes hundreds of them under build/ and none of
+   * them match. Without that exactness every file a build touched would rebuild the pane.
    */
   static boolean isConfiguredFolder(@NotNull Project project, @NotNull String changedPath) {
     return configuredFolderPaths(project).contains(changedPath);
@@ -130,7 +130,7 @@ public final class GrailsCustomFoldersRefreshListener implements ProjectActivity
     for (GrailsApplication application : GrailsApplicationManager.getInstance(project).getApplications()) {
       String rootPath = application.getRoot().getPath();
       for (String folder : folders) {
-        paths.add(rootPath + "/" + FolderPaths.normalize(folder));
+        paths.add(FolderPaths.toAbsolutePath(rootPath, folder));
       }
     }
     return paths;

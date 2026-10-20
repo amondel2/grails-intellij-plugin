@@ -24,7 +24,11 @@ import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.components.StoragePathMacros;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.VfsUtilCore;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.messages.Topic;
+import org.apache.grails.intellij.plugin.structure.GrailsApplication;
+import org.apache.grails.intellij.plugin.structure.GrailsApplicationManager;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -86,6 +90,28 @@ public final class GrailsCustomFoldersProjectService implements PersistentStateC
       }
     }
     return effective;
+  }
+
+  /**
+   * Whether the file lies inside one of the effective folders, resolved against the given application
+   * root. The Grails view's application and root nodes ask this for files outside the application,
+   * which is what lets *Select Opened File* reach a file in a folder outside the application or the
+   * project.
+   */
+  public boolean isInCustomFolder(@NotNull VirtualFile applicationRoot, @NotNull VirtualFile file) {
+    for (String configuredPath : getEffectiveFolders()) {
+      VirtualFile folder = FolderPaths.find(applicationRoot, configuredPath);
+      if (folder != null && folder.isDirectory() && VfsUtilCore.isAncestor(folder, file, false)) return true;
+    }
+    return false;
+  }
+
+  /** Whether the file lies inside a custom folder of any of this project's Grails applications. */
+  public boolean isInCustomFolder(@NotNull VirtualFile file) {
+    for (GrailsApplication application : GrailsApplicationManager.getInstance(project).getApplications()) {
+      if (isInCustomFolder(application.getRoot(), file)) return true;
+    }
+    return false;
   }
 
   /** Nothing is truncated here: the cap limits what the view renders, not what is configured. */

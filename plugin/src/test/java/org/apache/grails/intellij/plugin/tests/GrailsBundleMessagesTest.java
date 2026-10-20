@@ -87,13 +87,14 @@ public class GrailsBundleMessagesTest extends TestCase {
       "grails.settings.custom.folders.effective.folders",
       "grails.settings.custom.folders.source.global",
       "grails.settings.custom.folders.source.project",
-      "grails.settings.custom.folders.absolute.path",
-      "grails.settings.custom.folders.escapes.application.root",
-      "grails.settings.custom.folders.outside.application.root",
+      "grails.settings.custom.folders.not.a.folder",
+      "grails.settings.custom.folders.status.missing",
       "grails.settings.custom.folders.area.global",
       "grails.settings.custom.folders.area.project",
-      "grails.settings.custom.folders.row.add",
-      "grails.settings.custom.folders.row.remove");
+      "grails.settings.custom.folders.column.folder",
+      "grails.settings.custom.folders.empty",
+      "grails.settings.custom.folders.add.folder",
+      "grails.settings.custom.folders.add.path");
 
     for (String key : withoutArguments) {
       String message = GrailsBundle.message(key);
@@ -115,9 +116,8 @@ public class GrailsBundleMessagesTest extends TestCase {
 
     String row = GrailsBundle.message("grails.settings.custom.folders.invalid.row",
                                       "Global defaults", 2, "/etc/passwd",
-                                      "must be relative to the Grails application root, not an absolute path");
-    assertTrue("the row message names the area: " + row, row.contains("Global defaults"));
-    assertTrue("the row message names the row: " + row, row.contains("row 2"));
+                                      GrailsBundle.message("grails.settings.custom.folders.not.a.folder"));
+    assertEquals("Global defaults row 2: \"/etc/passwd\" is a file, not a folder.", row);
     assertTrue("the row message quotes the path: " + row, row.contains("\"/etc/passwd\""));
     assertFalse("no leftover placeholder: " + row, row.contains("{"));
 
