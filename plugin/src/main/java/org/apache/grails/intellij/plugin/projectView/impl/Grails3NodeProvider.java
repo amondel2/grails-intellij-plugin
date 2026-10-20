@@ -23,9 +23,8 @@ import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.projectView.impl.nodes.PsiFileNode;
 import com.intellij.ide.projectView.impl.nodes.PsiFileSystemItemFilter;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
-import com.intellij.openapi.module.Module;
-import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDirectory;
@@ -45,6 +44,7 @@ import org.apache.grails.intellij.plugin.util.version.Version;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -58,10 +58,16 @@ public class Grails3NodeProvider implements GrailsViewNodeProvider {
 
   /**
    * The built-in Grails 3+ test source roots directly under {@code src}, keyed by the Grails 2 phase
-   * label they were renamed from. Any other lifted root is titled {@code "Tests:" + directoryName}.
+   * label they were renamed from. Any other lifted root is titled by {@link #phaseTitle}.
    */
   private static final Map<String, String> PHASE_TITLES =
     Map.of("test", "Tests:unit", "integration-test", "Tests:integration", "functional-test", "Tests:functional");
+  /** The built-in phases in the order the pane lists them; custom phases follow, by directory name. */
+  private static final List<String> PHASE_ORDER = List.of("test", "integration-test", "functional-test");
+  /** How the Grails Gradle plugin lays out a phase declared in {@code testPhases}: {@code gebTest} lives in {@code src/geb-test}. */
+  private static final String GRAILS_PHASE_SUFFIX = "-test";
+  /** What a phase directory's name may end in: the Grails layout, or a Gradle test suite's ({@code src/gebTest}). */
+  private static final List<String> PHASE_SUFFIXES = List.of(GRAILS_PHASE_SUFFIX, "Test");
 
   @Override
   public @NotNull Collection<AbstractTreeNode<?>> createNodes(@NotNull GrailsApplication application,
@@ -97,11 +103,10 @@ public class Grails3NodeProvider implements GrailsViewNodeProvider {
       for (PsiDirectory testDir : testDirs) {
         String name = testDir.getName();
         Icon icon = "test".equals(name) ? PlatformIcons.TEST_SOURCE_FOLDER : GroovyMvcIcons.Grails_test;
-        // Every lifted root weighs TESTS_FOLDER, so two custom phases tie at 0 and their relative order
-        // is unspecified: GrailsNodeComparator returns the weight difference without reaching the
-        // platform comparator. Same class of tie as SRC_FOLDERS under src.
-        result.add(new GrailsPsiDirectoryNode(testDir, settings, icon, NodeWeights.TESTS_FOLDER,
-                                             PHASE_TITLES.getOrDefault(name, "Tests:" + name),
+        // Every lifted root weighs TESTS_FOLDER, so GrailsNodeComparator ties them without reaching the
+        // platform comparator, and the platform's stable sort keeps the order findTestSourceDirectories
+        // chose. Same class of tie as SRC_FOLDERS under src.
+        result.add(new GrailsPsiDirectoryNode(testDir, settings, icon, NodeWeights.TESTS_FOLDER, phaseTitle(name),
                                              GrailsViewItems::shouldShowItem,
                                              VfsUtilCore.getRelativePath(testDir.getVirtualFile(), projectRoot, '/')));
       }
@@ -119,38 +124,72 @@ public class Grails3NodeProvider implements GrailsViewNodeProvider {
   }
 
   /**
-   * Discovers the test source roots to lift out of {@code src}. A custom phase is a direct child of
-   * {@code src} that holds a registered test source or test resource root. The index is asked about
-   * the registered root itself, never about the directory above it, so a production root registered
-   * under {@code src} ({@code src/generated/java} as SOURCE) is not mistaken for a phase, and a
-   * phase registered as resources only ({@code src/smoke-test/resources} as TEST_RESOURCE) is
-   * still found. The conventional names are the fallback for a phase the module does not register,
-   * which is common before Gradle import.
+   * The node title for a lifted directory: the Grails 2 phase name for the built-in roots, otherwise
+   * {@code Tests:} and the directory name without its test suffix, so {@code geb-test} and {@code gebTest}
+   * both read {@code Tests:geb}, while {@code integration-test-cli}, which ends in no suffix, keeps its name.
+   */
+  private static @NotNull String phaseTitle(@NotNull String directoryName) {
+    String title = PHASE_TITLES.get(directoryName);
+    if (title != null) return title;
+    for (String suffix : PHASE_SUFFIXES) {
+      if (directoryName.length() > suffix.length() && directoryName.endsWith(suffix)) {
+        return "Tests:" + directoryName.substring(0, directoryName.length() - suffix.length());
+      }
+    }
+    return "Tests:" + directoryName;
+  }
+
+  /**
+   * Discovers the test phases to lift out of {@code src}: the direct children of {@code src} that
+   * <ul>
+   *   <li>are a built-in root ({@code test}, {@code integration-test}, {@code functional-test}) or end in
+   *       {@code -test}, which is how the Grails Gradle plugin lays out a phase declared in
+   *       {@code testPhases}. The name is what works before Gradle import, and after it too: the import
+   *       registers a custom source set's directories as production roots unless the build marks the set
+   *       as a test suite;</li>
+   *   <li>hold a registered test source or test resource root, in whichever module. Gradle import puts
+   *       every source set into a module of its own whose content root is the phase directory, so the
+   *       module that owns {@code src} registers no roots at all, and asking only that module, as this
+   *       used to, found no custom phase on an imported project. The index is asked about the registered
+   *       root itself, never about the directory above it, so {@code src/generated/java} registered as
+   *       SOURCE is not mistaken for a phase, and a phase registered as resources only
+   *       ({@code src/smoke-test/resources} as TEST_RESOURCE) is still found.</li>
+   * </ul>
+   * The built-in phases come first, in their conventional order, then the others by directory name.
    */
   private static @NotNull List<PsiDirectory> findTestSourceDirectories(@NotNull PsiDirectory src) {
     ProjectFileIndex index = ProjectFileIndex.getInstance(src.getProject());
     VirtualFile srcFile = src.getVirtualFile();
-    PsiManager psiManager = PsiManager.getInstance(src.getProject());
-    List<PsiDirectory> result = new ArrayList<>();
     Set<VirtualFile> lifted = new HashSet<>();
-    Module module = index.getModuleForFile(srcFile);
-    if (module != null) {
-      for (VirtualFile root : ModuleRootManager.getInstance(module).getSourceRoots()) {
-        if (!index.isInTestSourceContent(root)) continue;
-        VirtualFile child = directChildOf(srcFile, root);
-        if (child != null && lifted.add(child)) {
-          PsiDirectory directory = psiManager.findDirectory(child);
-          if (directory != null) result.add(directory);
-        }
-      }
+    for (VirtualFile root : ProjectRootManager.getInstance(src.getProject()).getContentSourceRoots()) {
+      if (!index.isInTestSourceContent(root)) continue;
+      VirtualFile child = directChildOf(srcFile, root);
+      if (child != null) lifted.add(child);
     }
     for (VirtualFile child : srcFile.getChildren()) {
-      if (child.isDirectory() && PHASE_TITLES.containsKey(child.getName()) && lifted.add(child)) {
-        PsiDirectory directory = psiManager.findDirectory(child);
-        if (directory != null) result.add(directory);
-      }
+      if (child.isDirectory() && isPhaseDirectoryName(child.getName())) lifted.add(child);
+    }
+
+    List<VirtualFile> ordered = new ArrayList<>(lifted);
+    ordered.sort(Comparator.comparingInt((VirtualFile dir) -> phaseRank(dir.getName())).thenComparing(VirtualFile::getName));
+    PsiManager psiManager = PsiManager.getInstance(src.getProject());
+    List<PsiDirectory> result = new ArrayList<>();
+    for (VirtualFile dir : ordered) {
+      PsiDirectory directory = psiManager.findDirectory(dir);
+      if (directory != null) result.add(directory);
     }
     return result;
+  }
+
+  /** Whether a directory under {@code src} is a phase by name alone: a built-in root, or the Grails {@code <phase>-test} layout. */
+  private static boolean isPhaseDirectoryName(@NotNull String name) {
+    return PHASE_TITLES.containsKey(name)
+           || name.length() > GRAILS_PHASE_SUFFIX.length() && name.endsWith(GRAILS_PHASE_SUFFIX);
+  }
+
+  private static int phaseRank(@NotNull String name) {
+    int rank = PHASE_ORDER.indexOf(name);
+    return rank < 0 ? PHASE_ORDER.size() : rank;
   }
 
   /** The direct child of {@code src} that contains {@code file}, or null when there is none. */

@@ -40,7 +40,9 @@ import org.jetbrains.jps.model.module.JpsModuleSourceRootType;
 
 import java.io.IOException;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -117,7 +119,7 @@ public class Grails3NodeProviderTest extends GrailsNodeProviderTestSupport {
     assertNull("the production root must never be lifted to a top-level node", findNode(nodes, "main"));
   }
 
-  /** A custom testPhases entry is lifted, and titled from its directory name. */
+  /** A registered custom phase is lifted and titled from its directory name, minus its test suffix. */
   public void testLiftsCustomTestPhaseAndTitlesItFromItsDirectoryName() {
     myFixture.addFileToProject("src/main/groovy/SomeService.groovy", "class SomeService {}");
     myFixture.addFileToProject("src/test/groovy/SomeServiceSpec.groovy", "class SomeServiceSpec {}");
@@ -134,10 +136,11 @@ public class Grails3NodeProviderTest extends GrailsNodeProviderTestSupport {
     assertEquals("every lifted test root keeps the tests weight", NodeWeights.TESTS_FOLDER, smokeTest.getNodeWeight());
     assertSame("a custom phase is not the unit test root, so it gets the Grails test icon",
                GroovyMvcIcons.Grails_test, smokeTest.getNodeIcon());
-    assertTitleAndLocation(smokeTest, "Tests:smoke-test", "src/smoke-test");
+    assertTitleAndLocation(smokeTest, "Tests:smoke", "src/smoke-test");
 
     GrailsPsiDirectoryNode cliTest = findNode(nodes, "integration-test-cli");
     assertNotNull("a custom test phase must be lifted out of src", cliTest);
+    // no test suffix to strip, so the whole directory name is the phase
     assertTitleAndLocation(cliTest, "Tests:integration-test-cli", "src/integration-test-cli");
 
     GrailsPsiDirectoryNode srcNode = findNode(nodes, "src");
@@ -148,8 +151,8 @@ public class Grails3NodeProviderTest extends GrailsNodeProviderTestSupport {
 
   /**
    * Discovery lifts a direct child of src only when the module registers a test source or test
-   * resource root beneath it, so a folder with no registered roots — whatever it is called — stays
-   * inside the src node.
+   * resource root beneath it, or when its name is a Grails phase's; a folder with neither — whatever
+   * else it is called — stays inside the src node.
    */
   public void testSrcChildWithoutACodeSourceDirectoryStaysUnderSrc() {
     myFixture.addFileToProject("src/main/groovy/SomeService.groovy", "class SomeService {}");
@@ -211,6 +214,67 @@ public class Grails3NodeProviderTest extends GrailsNodeProviderTestSupport {
   }
 
   /**
+   * Grails lays a phase declared in {@code testPhases} out as {@code src/<phase>-test}, and Gradle import
+   * registers such a directory as production sources rather than tests, so the name is what identifies
+   * it: these are lifted with no registered roots at all and titled by the phase, built-in phases first
+   * and the rest by name.
+   */
+  public void testGrailsTestPhaseDirectoriesAreLiftedByName() {
+    myFixture.addFileToProject("src/main/groovy/SomeService.groovy", "class SomeService {}");
+    myFixture.addFileToProject("src/test/groovy/SomeServiceSpec.groovy", "class SomeServiceSpec {}");
+    myFixture.addFileToProject("src/integration-test/groovy/SomeServiceIT.groovy", "class SomeServiceIT {}");
+    myFixture.addFileToProject("src/geb-test/groovy/LoginSpec.groovy", "class LoginSpec {}");
+    myFixture.addFileToProject("src/geb-parallel-test/groovy/SearchSpec.groovy", "class SearchSpec {}");
+    myFixture.addFileToProject("src/freeze-test/groovy/FreezeSpec.groovy", "class FreezeSpec {}");
+
+    Collection<AbstractTreeNode<?>> nodes =
+      new Grails3NodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT);
+
+    assertTitleAndLocation(findNode(nodes, "geb-test"), "Tests:geb", "src/geb-test");
+    assertTitleAndLocation(findNode(nodes, "geb-parallel-test"), "Tests:geb-parallel", "src/geb-parallel-test");
+    assertTitleAndLocation(findNode(nodes, "freeze-test"), "Tests:freeze", "src/freeze-test");
+    GrailsPsiDirectoryNode gebTest = findNode(nodes, "geb-test");
+    assertNotNull(gebTest);
+    assertEquals(NodeWeights.TESTS_FOLDER, gebTest.getNodeWeight());
+    assertSame("a custom phase is not the unit test root, so it gets the Grails test icon",
+               GroovyMvcIcons.Grails_test, gebTest.getNodeIcon());
+
+    List<String> testRoots = new ArrayList<>();
+    for (AbstractTreeNode<?> node : nodes) {
+      if (node instanceof GrailsPsiDirectoryNode dirNode && dirNode.getNodeWeight() == NodeWeights.TESTS_FOLDER) {
+        testRoots.add(dirNode.getValue().getName());
+      }
+    }
+    assertEquals("built-in phases first, in their order, then custom phases by name",
+                 List.of("test", "integration-test", "freeze-test", "geb-parallel-test", "geb-test"), testRoots);
+
+    GrailsPsiDirectoryNode srcNode = findNode(nodes, "src");
+    assertNotNull("src node must be present", srcNode);
+    assertFalse("a lifted phase must not duplicate under src",
+                srcNode.getFilter().shouldShow(srcNode.getValue().findSubdirectory("geb-test")));
+    assertFalse("src must not claim a file under a lifted phase, or reveal dead-ends",
+                srcNode.contains(myFixture.findFileInTempDir("src/freeze-test/groovy/FreezeSpec.groovy")));
+  }
+
+  /**
+   * A phase registered the way a Gradle test suite is ({@code src/smokeTest}) is titled without its
+   * suffix too; a camelCase directory with no registered root is not a phase by name alone, since only
+   * the Grails {@code -test} layout promises one.
+   */
+  public void testCamelCaseRegisteredPhaseIsTitledWithoutItsTestSuffix() {
+    myFixture.addFileToProject("src/main/groovy/SomeService.groovy", "class SomeService {}");
+    myFixture.addFileToProject("src/smokeTest/groovy/SomeSmokeSpec.groovy", "class SomeSmokeSpec {}");
+    myFixture.addFileToProject("src/loadTest/groovy/LoadSpec.groovy", "class LoadSpec {}");
+    registerSourceFolder("src/smokeTest/groovy", JavaSourceRootType.TEST_SOURCE);
+
+    Collection<AbstractTreeNode<?>> nodes =
+      new Grails3NodeProvider().createNodes(testApplication(false), ViewSettings.DEFAULT);
+
+    assertTitleAndLocation(findNode(nodes, "smokeTest"), "Tests:smoke", "src/smokeTest");
+    assertNull("an unregistered camelCase directory is not a phase by name alone", findNode(nodes, "loadTest"));
+  }
+
+  /**
    * A custom phase registered as a test resource root, holding no Groovy or Java directory, is
    * still a phase: the registered root maps to the direct child of {@code src} that contains it.
    */
@@ -224,7 +288,7 @@ public class Grails3NodeProviderTest extends GrailsNodeProviderTestSupport {
 
     GrailsPsiDirectoryNode smokeTest = findNode(nodes, "smoke-test");
     assertNotNull("a phase registered as test resources must be lifted out of src", smokeTest);
-    assertTitleAndLocation(smokeTest, "Tests:smoke-test", "src/smoke-test");
+    assertTitleAndLocation(smokeTest, "Tests:smoke", "src/smoke-test");
 
     GrailsPsiDirectoryNode srcNode = findNode(nodes, "src");
     assertNotNull("src node must be present", srcNode);
